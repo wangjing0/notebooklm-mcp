@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 from platformdirs import user_data_dir
+
+load_dotenv()
 
 NOTEBOOKLM_AUTH_URL = (
     "https://accounts.google.com/v3/signin/identifier"

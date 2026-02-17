@@ -147,7 +147,7 @@ async def main() -> None:
     sys.stderr.write("║                                                          ║\n")
     sys.stderr.write("║           NotebookLM MCP Server v1.1.0                   ║\n")
     sys.stderr.write("║                                                          ║\n")
-    sys.stderr.write("║   Chat with Gemini 2.5 through NotebookLM via MCP        ║\n")
+    sys.stderr.write("║      Chat with Gemini through NotebookLM via MCP         ║\n")
     sys.stderr.write("║                                                          ║\n")
     sys.stderr.write("╚══════════════════════════════════════════════════════════╝\n")
     sys.stderr.write("\n")

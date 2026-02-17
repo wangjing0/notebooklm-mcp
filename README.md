@@ -3,6 +3,7 @@
 # NotebookLM MCP
 
 **Let agent harness (Claude, Cursor, Codex...) chats directly with your NotebookLM project**
+
 Credits to [PleasePrompto](https://github.com/PleasePrompto). The original project is [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) in TypeScript. This is the Python version. 
 
 
