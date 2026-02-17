@@ -77,8 +77,6 @@ class SharedContextManager:
                 "--no-default-browser-check",
             ],
         )
-        if state_path:
-            launch_opts["storage_state"] = state_path
 
         base_profile = CONFIG.chromeProfileDir
         strategy = CONFIG.profileStrategy
@@ -111,6 +109,9 @@ class SharedContextManager:
             self._context = await try_launch(isolated_dir)
             self._current_profile_dir = isolated_dir
             self._is_isolated = True
+
+        if state_path:
+            await self._auth.load_auth_state(self._context, state_path)
 
         self._context_created_at = time.time()
         self._current_headless = should_be_headless

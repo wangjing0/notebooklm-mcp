@@ -72,7 +72,9 @@ class ToolHandlers:
 
             original_headless = CONFIG.headless
             original_timeout = CONFIG.browserTimeout
-            apply_browser_options(browser_options, show_browser)
+            _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
+            CONFIG.headless = _cfg.headless
+            CONFIG.browserTimeout = _cfg.browserTimeout
 
             override_headless: Optional[bool] = None
             if show_browser is not None:
@@ -239,7 +241,9 @@ class ToolHandlers:
 
         original_headless = CONFIG.headless
         original_timeout = CONFIG.browserTimeout
-        apply_browser_options(browser_options, show_browser)
+        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
+        CONFIG.headless = _cfg.headless
+        CONFIG.browserTimeout = _cfg.browserTimeout
 
         try:
             if send_progress:
@@ -290,7 +294,9 @@ class ToolHandlers:
 
         original_headless = CONFIG.headless
         original_timeout = CONFIG.browserTimeout
-        apply_browser_options(browser_options, show_browser)
+        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
+        CONFIG.headless = _cfg.headless
+        CONFIG.browserTimeout = _cfg.browserTimeout
 
         try:
             if send_progress:
