@@ -7,7 +7,7 @@
 Credits to the original project [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) in TypeScript. This is a Python version. 
 
 
-[Installation](#installation) • [Quick Start](#quick-start) • [Why NotebookLM](#why-notebooklm-not-local-rag) • [Examples](#real-world-example)
+[Installation](#installation) • [Quick Start](#quick-start-in-claude-code) • [Configuration](#configuration) • [Architecture](#architecture) • [Examples](#examples) • [FAQ](#faq) • [Disclaimer](#disclaimer)
 
 </div>
 
@@ -55,7 +55,7 @@ Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude do
 ### Setup
 
 ```bash
-git clone https://github.com/wangjing0/notebooklm-mcp.git
+git clone <this repository>
 cd notebooklm-mcp
 uv sync
 uv run playwright install chromium
@@ -157,7 +157,7 @@ Browswer state, chrome profiles are stored in `~/Library/Application Support/not
 
 ---
 
-## Common Commands
+## Examples
 
 | Intent | Say | Result |
 |--------|-----|--------|
@@ -185,7 +185,7 @@ Free tier has daily query limits ~50 per Google account.
 Chrome runs locally. Your credentials never leave your machine. Use a dedicated Google account if preferred.
 
 **Can I see what's happening?** \
-Yes — say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
+Yes — headless mode is enabled by default. however, say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
 
 ![notebooklm-browser](docs/with_browser_on.png)
 ---
@@ -193,13 +193,3 @@ Yes — say *"Ask NotebookLM '[your question]' and show me the browser"* to pass
 ## Disclaimer
 
 This tool automates browser interactions with NotebookLM. Google may detect automated usage. Use a dedicated Google account rather than your primary account. The browser is humanized (realistic typing speed, natural delays, mouse movements) but detection cannot be guaranteed.
-
----
-
-## Contributing
-
-Welcome to contribute! Found a bug? Have a feature idea? [Open an issue](https://github.com/wangjing0/notebooklm-mcp/issues) or submit a PR.
-
-## License
-
-MIT — Use freely in your projects.

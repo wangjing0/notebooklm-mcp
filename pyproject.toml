@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP server for Google NotebookLM browser automation"
 readme = "README.md"
 authors = [
-    {name = "Jing Wang", email = "jingwang.physics@gmail.com"}
+    {name = "Jing Wang", email = "jing.wang@accrete.ai"}
 ]
 requires-python = ">=3.10"
 dependencies = [
