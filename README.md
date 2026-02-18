@@ -16,14 +16,13 @@ Credits to [PleasePrompto](https://github.com/PleasePrompto). The original proje
 ## The Problem
 
 When you tell Claude Code or Cursor to "search through my local documentation", here's what happens:
-- **Massive token consumption**: Searching through documentation means reading multiple files repeatedly
-- **Inaccurate retrieval**: Searches for keywords, misses context and connections between docs
-- **Hallucinations**: When it can't find something, it invents plausible-sounding APIs
-- **Expensive & slow**: Each question requires re-reading multiple files
+- **Massive token consumption**: Searching through documentation means reading multiple files repeatedly, which is expensive and slow.
+- **Infra overhead**: You need to build a local RAG system, which is time-consuming and error-prone. 
+- **Hallucinations**: When it can't find something, it invents plausible-sounding answers
 
 ## The Solution
 
-Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini 2.5 that provides intelligent, synthesized answers from your docs.
+Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini that provides intelligent, synthesized answers from designed documents.
 
 ```
 Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude does the rest
@@ -31,7 +30,7 @@ Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude do
 
 **The real advantage**: No more manual copy-paste between NotebookLM and your editor. Your agent asks NotebookLM directly and gets answers straight back in the CLI. It builds deep understanding through automatic follow-ups — Claude asks multiple questions in sequence, each building on the last, getting specific implementation details, edge cases, and best practices. You can save NotebookLM links to your local library with tags and descriptions, and Claude automatically selects the relevant notebook based on your current task. And you can use the `ask_question` tool to ask NotebookLM anything you want.
 
-![cc_notebooks](docs/cc_notebooklm.png)
+![notebooklm-tools](docs/notebooklm-tools.png)
 ---
 
 ## Why NotebookLM, Not Local RAG?
@@ -83,7 +82,7 @@ claude mcp add notebooklm -- uv run --directory /path/to/notebooklm-mcp python m
 
 ---
 
-## Quick Start
+## Quick Start in Claude Code
 
 ### 1. Authenticate (one-time)
 
@@ -108,64 +107,7 @@ Share: **Settings → Share → Anyone with link → Copy**
 "I'm building with [library]. Here's my NotebookLM: [link]"
 ```
 
-Claude now asks NotebookLM whatever it needs, building expertise before writing code.
-
----
-
-## Real-World Example
-
-### Building an n8n Workflow Without Hallucinations
-
-**Challenge**: n8n's API is new — Claude hallucinates node names and functions.
-
-**Solution**:
-1. Downloaded complete n8n documentation → uploaded to NotebookLM
-2. Told Claude: *"Build me a Gmail spam filter workflow. Use this NotebookLM: [link]"*
-
-**Watch the AI-to-AI conversation:**
-
-```
-Claude → "How does Gmail integration work in n8n?"
-NotebookLM → "Use Gmail Trigger with polling, or Gmail node with Get Many..."
-
-Claude → "How to decode base64 email body?"
-NotebookLM → "Body is base64url encoded in payload.parts, use Function node..."
-
-Claude → "How to parse OpenAI response as JSON?"
-NotebookLM → "Set responseFormat to json, use {{ $json.spam }} in IF node..."
-
-Claude → "What about error handling if the API fails?"
-NotebookLM → "Use Error Trigger node with Continue On Fail enabled..."
-
-Claude → "Here's your complete workflow JSON..." (correct on first try)
-```
-
----
-
-## Tool Profiles
-
-Reduce token usage by loading only the tools you need.
-
-| Profile | Tools | Use Case |
-|---------|-------|----------|
-| **minimal** | 5 | Query-only: `ask_question`, `get_health`, `list_notebooks`, `select_notebook`, `get_notebook` |
-| **standard** | 10 | + Library management: `setup_auth`, `list_sessions`, `add_notebook`, `update_notebook`, `search_notebooks` |
-| **full** | 16 | All tools including `cleanup_data`, `re_auth`, `remove_notebook`, `reset_session`, `close_session`, `get_library_stats` |
-
-Configure via environment variables:
-
-```bash
-export NOTEBOOKLM_PROFILE=minimal
-export NOTEBOOKLM_DISABLED_TOOLS="cleanup_data,re_auth"
-```
-
-Or via CLI:
-
-```bash
-uv run python main.py config get
-uv run python main.py config set profile minimal
-uv run python main.py config reset
-```
+Claude now asks NotebookLM whatever metadata it needs, building expertise before writing code.
 
 ---
 
@@ -220,7 +162,7 @@ Data is stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the
 | Intent | Say | Result |
 |--------|-----|--------|
 | Authenticate | *"Log me in to NotebookLM"* | Chrome opens for login |
-| Add notebook | *"Add [link] to library"* | Saves notebook with metadata |
+| Add notebook | *"Add [notebooklm link] to library"* | Saves notebook with metadata |
 | List notebooks | *"Show our notebooks"* | Lists all saved notebooks |
 | Research first | *"Research this in NotebookLM before coding"* | Multi-question session |
 | Select notebook | *"Use the React notebook"* | Sets active notebook |
