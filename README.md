@@ -113,7 +113,7 @@ Claude now asks NotebookLM whatever metadata it needs, building expertise before
 
 ## Configuration
 
-All settings are controlled via environment variables. Create a `.env` file in the project root:
+All settings are controlled via environment variables. $cp `.env.example` to `.env` and edit the file:
 
 ```bash
 # Default notebook URL (optional)
@@ -140,20 +140,20 @@ NOTEBOOKLM_PROFILE=full
 ## Architecture
 
 ```
-Your Task → Claude/Codex
+Your Request → Claude/Cursor/Codex
                 ↓
-          MCP Server (Python)
+          notebooklm-mcp
                 ↓
        Playwright + Chrome
                 ↓
           NotebookLM UI
                 ↓
-          Gemini 2.5
+              Gemini
                 ↓
            Your Docs
 ```
 
-Data is stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
+Browswer state, chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
 
 ---
 
@@ -179,14 +179,15 @@ Data is stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the
 NotebookLM is specifically designed to only answer from uploaded sources. If it doesn't know, it says so.
 
 **What about rate limits?**
-Free tier has daily query limits per Google account. Quick account switching is supported via the `re_auth` tool.
+Free tier has daily query limits ~50 per Google account. Quick account switching is supported via the `re_auth` tool.
 
 **How secure is this?**
 Chrome runs locally. Your credentials never leave your machine. Use a dedicated Google account if preferred.
 
 **Can I see what's happening?**
-Yes — say *"Show me the browser"* to pass `show_browser: true` to any tool call.
+Yes — say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
 
+![notebooklm-browser](docs/with_browser_on.png)
 ---
 
 ## Disclaimer
