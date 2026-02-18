@@ -26,11 +26,12 @@ When you tell Claude Code or Cursor to "search through my local documentation", 
 Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini 2.5 that provides intelligent, synthesized answers from your docs.
 
 ```
-Your Task → Local Agent asks NotebookLM → Gemini synthesizes answer → Agent writes correct code
+Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude does the rest
 ```
 
-**The real advantage**: No more manual copy-paste between NotebookLM and your editor. Your agent asks NotebookLM directly and gets answers straight back in the CLI. It builds deep understanding through automatic follow-ups — Claude asks multiple questions in sequence, each building on the last, getting specific implementation details, edge cases, and best practices. You can save NotebookLM links to your local library with tags and descriptions, and Claude automatically selects the relevant notebook based on your current task.
+**The real advantage**: No more manual copy-paste between NotebookLM and your editor. Your agent asks NotebookLM directly and gets answers straight back in the CLI. It builds deep understanding through automatic follow-ups — Claude asks multiple questions in sequence, each building on the last, getting specific implementation details, edge cases, and best practices. You can save NotebookLM links to your local library with tags and descriptions, and Claude automatically selects the relevant notebook based on your current task. And you can use the `ask_question` tool to ask NotebookLM anything you want.
 
+![cc_notebooks](docs/cc_notebooklm.png)
 ---
 
 ## Why NotebookLM, Not Local RAG?
