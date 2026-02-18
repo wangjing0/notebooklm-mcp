@@ -4,7 +4,7 @@
 
 **Let agent harness (Claude, Cursor, Codex...) chats directly with your NotebookLM project**
 
-Credits to [PleasePrompto](https://github.com/PleasePrompto). The original project is [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) in TypeScript. This is the Python version. 
+Credits to the original project [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) in TypeScript. This is a Python version. 
 
 
 [Installation](#installation) • [Quick Start](#quick-start) • [Why NotebookLM](#why-notebooklm-not-local-rag) • [Examples](#real-world-example)
@@ -22,7 +22,7 @@ When you tell Claude Code or Cursor to "search through my local documentation", 
 
 ## The Solution
 
-Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini that provides intelligent, synthesized answers from designed documents.
+Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini that provides intelligent, synthesized answers from designated documents.
 
 ```
 Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude does the rest
@@ -107,7 +107,7 @@ Share: **Settings → Share → Anyone with link → Copy**
 "I'm building with [library]. Here's my NotebookLM: [link]"
 ```
 
-Claude now asks NotebookLM whatever metadata it needs, building expertise before writing code.
+Then, Claude will ask about whatever metadata it needs to setup the notebook.
 
 ---
 
@@ -150,7 +150,7 @@ Your Request → Claude/Cursor/Codex
                 ↓
               Gemini
                 ↓
-           Your Docs
+           Your documents, websites, repos, videos, etc.
 ```
 
 Browswer state, chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
@@ -175,16 +175,16 @@ Browswer state, chrome profiles are stored in `~/Library/Application Support/not
 
 ## FAQ
 
-**Is it really zero hallucinations?**
+**Is it really zero hallucinations?** \
 NotebookLM is specifically designed to only answer from uploaded sources. If it doesn't know, it says so.
 
-**What about rate limits?**
-Free tier has daily query limits ~50 per Google account. Quick account switching is supported via the `re_auth` tool.
+**What about rate limits?** \
+Free tier has daily query limits ~50 per Google account.
 
-**How secure is this?**
+**How secure is this?** \
 Chrome runs locally. Your credentials never leave your machine. Use a dedicated Google account if preferred.
 
-**Can I see what's happening?**
+**Can I see what's happening?** \
 Yes — say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
 
 ![notebooklm-browser](docs/with_browser_on.png)
@@ -194,13 +194,11 @@ Yes — say *"Ask NotebookLM '[your question]' and show me the browser"* to pass
 
 This tool automates browser interactions with NotebookLM. Google may detect automated usage. Use a dedicated Google account rather than your primary account. The browser is humanized (realistic typing speed, natural delays, mouse movements) but detection cannot be guaranteed.
 
-Always review AI-generated code before committing. AI agents are assistants, not infallible oracles.
-
 ---
 
 ## Contributing
 
-Found a bug? Have a feature idea? [Open an issue](https://github.com/wangjing0/notebooklm-mcp/issues) or submit a PR.
+Welcome to contribute! Found a bug? Have a feature idea? [Open an issue](https://github.com/wangjing0/notebooklm-mcp/issues) or submit a PR.
 
 ## License
 
