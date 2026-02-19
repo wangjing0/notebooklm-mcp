@@ -2,7 +2,7 @@
   "mcpServers": {
     "notebooklm": {
       "command": "uv",
-      "args": ["run", "notebooklm-mcp"]
+      "args": ["run", "--directory", "/path/to/notebooklm-mcp", "python", "main.py"]
     }
   }
 }
