@@ -14,11 +14,12 @@ Credits to the original [NotebookLM MCP](https://github.com/PleasePrompto/notebo
 
 ## The Problem
 
-When you ask Claude Code or Cursor to “search through my PDFs, websites, GitHub repos, YouTube videos,” you often get:
+When you ask Claude Code or Cursor to “search through my collections of documents” you often get:
 
 - **Heavy token use** — Reading many files over and over is expensive and slow.
 - **Infra overhead** — Building and maintaining a local RAG stack is time-consuming and brittle.
 - **Hallucinations** — When the model can't find something, it may invent plausible-sounding answers.
+- **Why not leverage google's ecosystem** — NotebookLM can process a wide range of multimedia sources such as PDFs, websites, GitHub repos, YouTube videos, etc.
 
 ## The Solution
 
