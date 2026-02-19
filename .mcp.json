@@ -3,6 +3,10 @@
     "notebooklm": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/notebooklm-mcp", "python", "main.py"]
+    },
+    "notebooklm-mcp-server": {
+      "type": "http",
+      "url": "https://notebooklm-mcp.wrk.ue2.dev.aws.accrete.sh/mcp"
     }
   }
 }
