@@ -1,6 +1,5 @@
 """Tests for configuration utilities."""
 
-import pytest
 
 from src.config import _parse_bool, _parse_int, _parse_list, build_config
 

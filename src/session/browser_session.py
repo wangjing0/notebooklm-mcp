@@ -1,7 +1,8 @@
+import contextlib
 import re
-import secrets
 import time
-from typing import TYPE_CHECKING, Optional
+
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from playwright.async_api import BrowserContext, Page
@@ -13,6 +14,7 @@ from ..types import ProgressCallback, SessionInfo
 from ..utils.logger import log
 from ..utils.page_utils import snapshot_all_responses, wait_for_latest_answer
 from ..utils.stealth_utils import human_type, random_delay
+
 
 if TYPE_CHECKING:
     from .shared_context_manager import SharedContextManager
@@ -36,8 +38,8 @@ class BrowserSession:
 
         self._shared_ctx = shared_context_manager
         self._auth = auth_manager
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
+        self._context: BrowserContext | None = None
+        self._page: Page | None = None
         self._initialized = False
 
         log.info(f"BrowserSession {session_id} created")
@@ -89,10 +91,8 @@ class BrowserSession:
         except Exception as e:
             log.error(f"Failed to initialize session {self.session_id}: {e}")
             if self._page:
-                try:
+                with contextlib.suppress(Exception):
                     await self._page.close()
-                except Exception:
-                    pass
                 self._page = None
             raise
 
@@ -108,7 +108,7 @@ class BrowserSession:
                 log.success("  Chat input ready (fallback)!")
             except Exception as e:
                 log.error(f"  NotebookLM interface not ready: {e}")
-                raise RuntimeError("Could not find NotebookLM chat input. Please ensure the notebook page has loaded correctly.")
+                raise RuntimeError("Could not find NotebookLM chat input. Please ensure the notebook page has loaded correctly.") from e
 
     async def _ensure_authenticated(self) -> bool:
         if not self._page or not self._context:
@@ -151,7 +151,7 @@ class BrowserSession:
         except Exception as e:
             log.warning(f"  Failed to restore sessionStorage: {e}")
 
-    def _origin(self, url: str) -> Optional[str]:
+    def _origin(self, url: str) -> str | None:
         try:
             p = urlparse(url)
             return f"{p.scheme}://{p.netloc}"
@@ -169,7 +169,7 @@ class BrowserSession:
         except Exception:
             return True
 
-    async def ask(self, question: str, send_progress: Optional[ProgressCallback] = None) -> str:
+    async def ask(self, question: str, send_progress: ProgressCallback | None = None) -> str:
         async def ask_once() -> str:
             if not self._initialized or self._page_is_closed():
                 log.warning("  Session not initialized or page missing - re-initializing...")
@@ -181,6 +181,7 @@ class BrowserSession:
             if send_progress:
                 await send_progress("Verifying authentication...", 2, 5)
 
+            assert self._context is not None
             if not await self._auth.validate_cookies_expiry(self._context):
                 log.warning("  Session expired, re-authenticating...")
                 if send_progress:
@@ -236,10 +237,8 @@ class BrowserSession:
                 try:
                     self._initialized = False
                     if self._page:
-                        try:
+                        with contextlib.suppress(Exception):
                             await self._page.close()
-                        except Exception:
-                            pass
                     self._page = None
                     await self.init()
                     return await ask_once()
@@ -249,7 +248,7 @@ class BrowserSession:
             log.error(f"Failed to ask question: {msg}")
             raise
 
-    async def _find_chat_input(self) -> Optional[str]:
+    async def _find_chat_input(self) -> str | None:
         if not self._page:
             return None
         for sel in ["textarea.query-box-input", 'textarea[aria-label="Feld für Anfragen"]']:
@@ -304,10 +303,8 @@ class BrowserSession:
                 log.warning("  Detected closed page/context during reset. Recovering...")
                 self._initialized = False
                 if self._page:
-                    try:
+                    with contextlib.suppress(Exception):
                         await self._page.close()
-                    except Exception:
-                        pass
                 self._page = None
                 await self.init()
                 await reset_once()

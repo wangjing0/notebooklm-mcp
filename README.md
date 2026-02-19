@@ -191,3 +191,20 @@ Yes — headless mode is enabled by default. however, say *"Ask NotebookLM '[you
 ## Disclaimer
 
 This tool automates browser interactions with NotebookLM using Playwright. Chrome runs in stealth mode — it disguises itself as a regular human-controlled browser by patching automation signals that websites use to detect bots. This is not illegal, but Google may still detect automated usage and rate-limit or block the account. Use a dedicated Google account rather than your primary account. The browser is humanized (realistic typing speed, natural delays, mouse movements) but detection cannot be guaranteed.
+
+### Are there alternatives?
+
+Google does not offer a public API for NotebookLM. As of early 2026, the only official programmatic access is the [NotebookLM Enterprise API](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks) (released September 2025, alpha), which requires a paid Google Cloud enterprise contract and covers only notebook/source management — not querying notebooks for answers. Developer forums have been [requesting a consumer API since mid-2024](https://discuss.ai.google.dev/t/how-to-access-notebooklm-via-api/5084) with no concrete timeline from Google.
+
+The restriction is intentional: Google uses API access as the primary differentiator for its enterprise tier, and opening a consumer API would require substantially different data-handling infrastructure to meet GDPR/HIPAA obligations for personal data.
+
+**Alternatives and their trade-offs:**
+
+| Approach | Example | Reliability | Risk |
+|---|---|---|---|
+| Browser automation (Playwright) | This project | High — mirrors real user behavior | Low — follows ToS spirit |
+| Reverse-engineered internal APIs | [notebooklm-py](https://github.com/teng-lin/notebooklm-py) | Medium — breaks on Google deploys | High — unsupported, undocumented |
+| Enterprise API | [Google Cloud](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/overview) | High | None — but requires enterprise license |
+| Other open-source implementation | [open-notebook](https://github.com/lfnovo/open-notebook), [SurfSense](https://github.com/Decentralised-AI/SurfSense-Open-Source-Alternative-to-NotebookLM) | Medium | None — loses NotebookLM-specific features |
+
+Browser automation is the pragmatic solution for free-tier access. Multiple independent projects — [notebooklm_source_automation](https://github.com/DataNath/notebooklm_source_automation), [notebooklm-podcast-automator](https://github.com/upamune/notebooklm-podcast-automator) — use the same approach, as does this project. See also [this community discussion](https://news.ycombinator.com/item?id=41756808) and [the case for a public API](https://medium.com/@kombib/public-notebooklm-api-why-we-need-it-now-7244a5371f57).

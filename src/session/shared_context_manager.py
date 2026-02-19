@@ -1,8 +1,9 @@
+import contextlib
 import os
 import shutil
 import time
+
 from pathlib import Path
-from typing import Optional
 
 from playwright.async_api import BrowserContext, async_playwright
 
@@ -14,17 +15,17 @@ from ..utils.logger import log
 class SharedContextManager:
     def __init__(self, auth_manager: AuthManager) -> None:
         self._auth = auth_manager
-        self._context: Optional[BrowserContext] = None
-        self._context_created_at: Optional[float] = None
-        self._current_profile_dir: Optional[str] = None
+        self._context: BrowserContext | None = None
+        self._context_created_at: float | None = None
+        self._current_profile_dir: str | None = None
         self._is_isolated: bool = False
-        self._current_headless: Optional[bool] = None
+        self._current_headless: bool | None = None
         self._pw = None
 
         log.info("SharedContextManager initialized (PERSISTENT MODE)")
         log.info(f"  Chrome Profile: {CONFIG.chromeProfileDir}")
 
-    async def get_or_create_context(self, override_headless: Optional[bool] = None) -> BrowserContext:
+    async def get_or_create_context(self, override_headless: bool | None = None) -> BrowserContext:
         if self.needs_headless_mode_change(override_headless):
             log.warning("Headless mode change detected - recreating browser context...")
             await self.close_context()
@@ -34,6 +35,7 @@ class SharedContextManager:
         else:
             log.success("Reusing existing persistent context")
 
+        assert self._context is not None
         return self._context
 
     async def _needs_recreation(self) -> bool:
@@ -49,7 +51,7 @@ class SharedContextManager:
             self._current_headless = None
             return True
 
-    async def _recreate_context(self, override_headless: Optional[bool] = None) -> None:
+    async def _recreate_context(self, override_headless: bool | None = None) -> None:
         if self._context:
             try:
                 await self._context.close()
@@ -64,30 +66,31 @@ class SharedContextManager:
 
         should_be_headless = (not override_headless) if override_headless is not None else CONFIG.headless
 
-        launch_opts = dict(
-            headless=should_be_headless,
-            channel="chrome",
-            viewport={"width": CONFIG.viewport.width, "height": CONFIG.viewport.height},
-            locale="en-US",
-            timezone_id="Europe/Berlin",
-            args=[
+        launch_opts = {
+            "headless": should_be_headless,
+            "channel": "chrome",
+            "viewport": {"width": CONFIG.viewport.width, "height": CONFIG.viewport.height},
+            "locale": "en-US",
+            "timezone_id": "Europe/Berlin",
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
                 "--no-first-run",
                 "--no-default-browser-check",
             ],
-        )
+        }
 
         base_profile = CONFIG.chromeProfileDir
         strategy = CONFIG.profileStrategy
 
         if self._pw is None:
             self._pw = await async_playwright().start()
+        pw = self._pw
 
         async def try_launch(user_data_dir: str) -> BrowserContext:
             log.info("  Launching persistent Chrome context...")
             log.dim(f"  Profile location: {user_data_dir}")
-            return await self._pw.chromium.launch_persistent_context(user_data_dir, **launch_opts)
+            return await pw.chromium.launch_persistent_context(user_data_dir, **launch_opts)
 
         try:
             if strategy == "isolated":
@@ -116,16 +119,14 @@ class SharedContextManager:
         self._context_created_at = time.time()
         self._current_headless = should_be_headless
 
-        def on_close():
+        def on_close() -> None:
             log.warning("Persistent context was closed externally")
             self._context = None
             self._context_created_at = None
             self._current_headless = None
 
-        try:
-            self._context.on("close", lambda: on_close())
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            self._context.on("close", lambda _ctx: on_close())
 
         if state_path:
             try:
@@ -168,13 +169,13 @@ class SharedContextManager:
             except Exception:
                 pass
 
-    def needs_headless_mode_change(self, override_headless: Optional[bool] = None) -> bool:
+    def needs_headless_mode_change(self, override_headless: bool | None = None) -> bool:
         if self._current_headless is None:
             return False
         target = (not override_headless) if override_headless is not None else CONFIG.headless
         return self._current_headless != target
 
-    def get_current_headless_mode(self) -> Optional[bool]:
+    def get_current_headless_mode(self) -> bool | None:
         return self._current_headless
 
     def get_context_info(self) -> dict:

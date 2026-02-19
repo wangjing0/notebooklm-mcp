@@ -1,16 +1,21 @@
 import json
 import re
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import cast
 
 from ..config import CONFIG
 from ..utils.logger import log
-from .types import AddNotebookInput, Library, LibraryStats, NotebookEntry, UpdateNotebookInput
+from .types import (
+    Library,
+    LibraryStats,
+    NotebookEntry,
+)
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class NotebookLibrary:
@@ -76,7 +81,7 @@ class NotebookLibrary:
             log.error(f"  Failed to save library: {e}")
             raise
 
-    def _generate_id(self, name: str, existing_notebooks: Optional[list] = None) -> str:
+    def _generate_id(self, name: str, existing_notebooks: list | None = None) -> str:
         notebooks = existing_notebooks if existing_notebooks is not None else self._library["notebooks"]
         base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:30]
         slug = base or "notebook"
@@ -109,20 +114,20 @@ class NotebookLibrary:
         updated["notebooks"] = list(self._library["notebooks"]) + [entry]
         if len(updated["notebooks"]) == 1:
             updated["active_notebook_id"] = entry_id
-        self._save_library(updated)
+        self._save_library(cast(Library, updated))
         log.success(f"Notebook added: {entry_id}")
         return entry
 
     def list_notebooks(self) -> list:
         return self._library["notebooks"]
 
-    def get_notebook(self, notebook_id: str) -> Optional[NotebookEntry]:
+    def get_notebook(self, notebook_id: str) -> NotebookEntry | None:
         for n in self._library["notebooks"]:
             if n["id"] == notebook_id:
                 return n
         return None
 
-    def get_active_notebook(self) -> Optional[NotebookEntry]:
+    def get_active_notebook(self) -> NotebookEntry | None:
         active_id = self._library.get("active_notebook_id")
         if not active_id:
             return None
@@ -141,8 +146,10 @@ class NotebookLibrary:
             else:
                 updated_notebooks.append(n)
         updated["notebooks"] = updated_notebooks
-        self._save_library(updated)
-        return self.get_notebook(notebook_id)
+        self._save_library(cast(Library, updated))
+        nb = self.get_notebook(notebook_id)
+        assert nb is not None
+        return nb
 
     def update_notebook(self, input_data: dict) -> NotebookEntry:
         notebook_id = input_data["id"]
@@ -158,8 +165,8 @@ class NotebookLibrary:
             updated_entry if n["id"] == notebook_id else n
             for n in self._library["notebooks"]
         ]
-        self._save_library(updated)
-        return updated_entry
+        self._save_library(cast(Library, updated))
+        return cast(NotebookEntry, updated_entry)
 
     def remove_notebook(self, notebook_id: str) -> bool:
         if not self.get_notebook(notebook_id):
@@ -168,10 +175,10 @@ class NotebookLibrary:
         updated["notebooks"] = [n for n in self._library["notebooks"] if n["id"] != notebook_id]
         if updated.get("active_notebook_id") == notebook_id:
             updated["active_notebook_id"] = updated["notebooks"][0]["id"] if updated["notebooks"] else None
-        self._save_library(updated)
+        self._save_library(cast(Library, updated))
         return True
 
-    def increment_use_count(self, notebook_id: str) -> Optional[NotebookEntry]:
+    def increment_use_count(self, notebook_id: str) -> NotebookEntry | None:
         idx = next((i for i, n in enumerate(self._library["notebooks"]) if n["id"] == notebook_id), -1)
         if idx == -1:
             return None
@@ -179,7 +186,7 @@ class NotebookLibrary:
         notebooks = list(self._library["notebooks"])
         notebooks[idx] = {**notebooks[idx], "use_count": notebooks[idx]["use_count"] + 1, "last_used": _now_iso()}
         updated["notebooks"] = notebooks
-        self._save_library(updated)
+        self._save_library(cast(Library, updated))
         return notebooks[idx]
 
     def search_notebooks(self, query: str) -> list:

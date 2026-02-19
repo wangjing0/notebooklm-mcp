@@ -1,17 +1,23 @@
 import asyncio
+import contextlib
 import json
-import os
 import shutil
 import time
+
 from pathlib import Path
-from typing import Optional
 
 from playwright.async_api import BrowserContext, Page
 
 from ..config import CONFIG, NOTEBOOKLM_AUTH_URL
 from ..types import ProgressCallback
 from ..utils.logger import log
-from ..utils.stealth_utils import human_type, random_delay, random_mouse_movement, realistic_click
+from ..utils.stealth_utils import (
+    human_type,
+    random_delay,
+    random_mouse_movement,
+    realistic_click,
+)
+
 
 CRITICAL_COOKIE_NAMES = [
     "SID", "HSID", "SSID", "APISID", "SAPISID",
@@ -24,7 +30,7 @@ class AuthManager:
         self._state_path = Path(CONFIG.browserStateDir) / "state.json"
         self._session_path = Path(CONFIG.browserStateDir) / "session.json"
 
-    async def save_browser_state(self, context: BrowserContext, page: Optional[Page] = None) -> bool:
+    async def save_browser_state(self, context: BrowserContext, page: Page | None = None) -> bool:
         try:
             await context.storage_state(path=str(self._state_path))
             if page:
@@ -52,10 +58,10 @@ class AuthManager:
     def has_saved_state(self) -> bool:
         return self._state_path.exists()
 
-    def get_state_path(self) -> Optional[str]:
+    def get_state_path(self) -> str | None:
         return str(self._state_path) if self._state_path.exists() else None
 
-    async def get_valid_state_path(self) -> Optional[str]:
+    async def get_valid_state_path(self) -> str | None:
         if not self.has_saved_state():
             return None
         if await self.is_state_expired():
@@ -63,7 +69,7 @@ class AuthManager:
             return None
         return str(self._state_path)
 
-    async def load_session_storage(self) -> Optional[dict]:
+    async def load_session_storage(self) -> dict | None:
         try:
             data = self._session_path.read_text(encoding="utf-8")
             session_data = json.loads(data)
@@ -87,7 +93,7 @@ class AuthManager:
             for cookie in google_cookies:
                 expires = cookie.get("expires", -1)
                 if expires is not None and expires != -1 and expires < current_time:
-                    log.warning(f"Cookie '{cookie['name']}' has expired")
+                    log.warning(f"Cookie '{cookie.get('name', '')}' has expired")
                     return False
             log.success("State validation passed")
             return True
@@ -110,7 +116,7 @@ class AuthManager:
             for c in critical:
                 expires = c.get("expires", -1)
                 if expires is not None and expires != -1 and expires < current_time:
-                    expired.append(c["name"])
+                    expired.append(c.get("name", ""))
             if expired:
                 log.warning(f"Expired cookies: {', '.join(expired)}")
                 return False
@@ -131,7 +137,7 @@ class AuthManager:
         except Exception:
             return True
 
-    async def perform_login(self, page: Page, send_progress: Optional[ProgressCallback] = None) -> bool:
+    async def perform_login(self, page: Page, send_progress: ProgressCallback | None = None) -> bool:
         try:
             log.info("Opening Google login page...")
             if send_progress:
@@ -345,7 +351,7 @@ class AuthManager:
                 continue
         return False
 
-    async def perform_setup(self, send_progress: Optional[ProgressCallback] = None, override_headless: Optional[bool] = None) -> bool:
+    async def perform_setup(self, send_progress: ProgressCallback | None = None, override_headless: bool | None = None) -> bool:
         from playwright.async_api import async_playwright
 
         show_browser = override_headless if override_headless is not None else True
@@ -423,10 +429,8 @@ class AuthManager:
     async def clear_state(self) -> bool:
         try:
             for p in (self._state_path, self._session_path):
-                try:
+                with contextlib.suppress(Exception):
                     p.unlink()
-                except Exception:
-                    pass
             log.success("Authentication state cleared")
             return True
         except Exception as e:

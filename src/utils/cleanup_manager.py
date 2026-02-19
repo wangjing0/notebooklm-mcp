@@ -1,9 +1,7 @@
-import os
-import platform
 import shutil
 import sys
+
 from pathlib import Path
-from typing import Optional
 
 from platformdirs import user_data_dir
 
@@ -38,11 +36,12 @@ class CleanupManager:
     def format_bytes(self, n: int) -> str:
         if n == 0:
             return "0 Bytes"
+        value: float = float(n)
         for unit in ("Bytes", "KB", "MB", "GB"):
-            if n < 1024:
-                return f"{n:.2f} {unit}"
-            n /= 1024
-        return f"{n:.2f} TB"
+            if value < 1024:
+                return f"{value:.2f} {unit}"
+            value /= 1024
+        return f"{value:.2f} TB"
 
     def get_cleanup_paths(self, mode: str, preserve_library: bool = False) -> dict:
         categories = []

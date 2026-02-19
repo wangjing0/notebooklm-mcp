@@ -1,6 +1,5 @@
 """Tests for SettingsManager profile and tool filtering."""
 
-import json
 
 import pytest
 

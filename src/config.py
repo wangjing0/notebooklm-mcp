@@ -1,11 +1,11 @@
 import os
-import re
+
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 from platformdirs import user_data_dir
+
 
 load_dotenv()
 
@@ -60,7 +60,7 @@ class Config:
     instanceProfileTtlHours: int = 72
     instanceProfileMaxCount: int = 20
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.dataDir:
             self.dataDir = _DATA_DIR
         if not self.configDir:
@@ -73,13 +73,13 @@ class Config:
             self.chromeInstancesDir = str(Path(self.dataDir) / "chrome_profile_instances")
 
 
-def _parse_bool(value: Optional[str], default: bool) -> bool:
+def _parse_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.lower() in ("true", "1")
 
 
-def _parse_int(value: Optional[str], default: int) -> int:
+def _parse_int(value: str | None, default: int) -> int:
     if value is None:
         return default
     try:
@@ -88,7 +88,7 @@ def _parse_int(value: Optional[str], default: int) -> int:
         return default
 
 
-def _parse_list(value: Optional[str], default: list) -> list:
+def _parse_list(value: str | None, default: list) -> list:
     if not value:
         return default
     return [s.strip() for s in value.split(",") if s.strip()]
@@ -133,7 +133,7 @@ def ensure_directories(cfg: "Config") -> None:
         Path(d).mkdir(parents=True, exist_ok=True)
 
 
-def apply_browser_options(cfg: "Config", options: Optional[dict] = None, show_browser: Optional[bool] = None) -> "Config":
+def apply_browser_options(cfg: "Config", options: dict | None = None, show_browser: bool | None = None) -> "Config":
     import copy
     c = copy.copy(cfg)
     c.viewport = copy.copy(cfg.viewport)

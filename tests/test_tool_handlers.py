@@ -2,7 +2,6 @@
 
 import pytest
 
-from src.library.notebook_library import NotebookLibrary
 from src.tools.handlers import ToolHandlers
 
 

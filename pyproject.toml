@@ -82,7 +82,9 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/**" = ["T201", "ANN001", "ANN201"]
+"tests/**" = ["T201", "ANN001", "ANN201", "ANN204", "ARG002"]
+"src/utils/cli_handler.py" = ["T201"]
+"src/utils/logger.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]

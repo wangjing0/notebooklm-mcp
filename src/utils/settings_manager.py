@@ -1,10 +1,11 @@
 import json
 import os
+
 from pathlib import Path
-from typing import Any
 
 from ..config import CONFIG
 from .logger import log
+
 
 PROFILES: dict[str, list[str]] = {
     "minimal": [

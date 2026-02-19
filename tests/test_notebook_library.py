@@ -72,7 +72,6 @@ class TestAddNotebook:
         assert nb1["id"] != nb2["id"]
 
     def test_add_persists_across_instances(self, tmp_library, sample_notebook_data, monkeypatch):
-        import src.config
         tmp_library.add_notebook(sample_notebook_data)
         library2 = NotebookLibrary()
         assert len(library2.list_notebooks()) == 1
@@ -166,7 +165,6 @@ class TestUpdateNotebook:
             tmp_library.update_notebook({"id": "nonexistent", "name": "x"})
 
     def test_update_persists(self, tmp_library_with_notebook, monkeypatch):
-        import src.config
         nb_id = tmp_library_with_notebook.list_notebooks()[0]["id"]
         tmp_library_with_notebook.update_notebook({"id": nb_id, "name": "Persisted Name"})
         library2 = NotebookLibrary()

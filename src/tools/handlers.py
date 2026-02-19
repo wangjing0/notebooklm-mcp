@@ -1,14 +1,16 @@
 import time
-from typing import Any, Optional
+
+from typing import Any
 
 from ..auth.auth_manager import AuthManager
 from ..config import CONFIG, apply_browser_options
 from ..errors import RateLimitError
 from ..library.notebook_library import NotebookLibrary
 from ..session.session_manager import SessionManager
+from ..types import ProgressCallback
 from ..utils.cleanup_manager import CleanupManager
 from ..utils.logger import log
-from ..types import ProgressCallback
+
 
 FOLLOW_UP_REMINDER = (
     "\n\nEXTREMELY IMPORTANT: Is that ALL you need to know? You can always ask another question "
@@ -32,14 +34,14 @@ class ToolHandlers:
     async def handle_ask_question(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
         question: str = args["question"]
-        session_id: Optional[str] = args.get("session_id")
-        notebook_id: Optional[str] = args.get("notebook_id")
-        notebook_url: Optional[str] = args.get("notebook_url")
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        session_id: str | None = args.get("session_id")
+        notebook_id: str | None = args.get("notebook_id")
+        notebook_url: str | None = args.get("notebook_url")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         log.info("[TOOL] ask_question called")
         log.info(f'  Question: "{question[:100]}"...')
@@ -76,7 +78,7 @@ class ToolHandlers:
             CONFIG.headless = _cfg.headless
             CONFIG.browserTimeout = _cfg.browserTimeout
 
-            override_headless: Optional[bool] = None
+            override_headless: bool | None = None
             if show_browser is not None:
                 override_headless = show_browser
             elif browser_options and browser_options.get("show") is not None:
@@ -228,10 +230,10 @@ class ToolHandlers:
     async def handle_setup_auth(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         if send_progress:
             await send_progress("Initializing authentication setup...", 0, 10)
@@ -281,10 +283,10 @@ class ToolHandlers:
     async def handle_re_auth(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         if send_progress:
             await send_progress("Preparing re-authentication...", 0, 12)
@@ -439,7 +441,7 @@ class ToolHandlers:
         try:
             mode = "deep"
             if not confirm:
-                preview = await manager.get_cleanup_paths(mode, preserve_library)
+                preview = manager.get_cleanup_paths(mode, preserve_library)
                 log.info(f"  Found {len(preview['total_paths'])} items ({manager.format_bytes(preview['total_size_bytes'])})")
                 return {
                     "success": True,
@@ -454,7 +456,7 @@ class ToolHandlers:
                     },
                 }
             else:
-                result = await manager.perform_cleanup(mode, preserve_library)
+                result = manager.perform_cleanup(mode, preserve_library)
                 if result["success"]:
                     log.success(f"[TOOL] cleanup_data completed - deleted {len(result['deleted_paths'])} items")
                 else:
