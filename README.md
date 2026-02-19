@@ -4,10 +4,9 @@
 
 **Let agent harness (Claude, Cursor, Codex...) chats directly with your NotebookLM project**
 
-Credits to the original project [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) in TypeScript. This is a Python version. 
+Credits to the original [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) (TypeScript). This is a Python port.
 
-
-[Installation](#installation) • [Quick Start](#quick-start-in-claude-code) • [Configuration](#configuration) • [Architecture](#architecture) • [Examples](#examples) • [FAQ](#faq) • [Disclaimer](#disclaimer)
+[Installation](#installation) · [Quick Start](#quick-start-in-claude-code) · [Configuration](#configuration) · [Architecture](#architecture) · [Examples](#examples) · [FAQ](#faq) · [Disclaimer](#disclaimer)
 
 </div>
 
@@ -15,32 +14,30 @@ Credits to the original project [NotebookLM MCP](https://github.com/PleasePrompt
 
 ## The Problem
 
-When you tell Claude Code or Cursor to "search through my local documentation", here's what happens:
-- **Massive token consumption**: Searching through documentation means reading multiple files repeatedly, which is expensive and slow.
-- **Infra overhead**: You need to build a local RAG system, which is time-consuming and error-prone. 
-- **Hallucinations**: When it can't find something, it invents plausible-sounding answers
+When you ask Claude Code or Cursor to “search through my PDFs, websites, GitHub repos, YouTube videos,” you often get:
+
+- **Heavy token use** — Reading many files over and over is expensive and slow.
+- **Infra overhead** — Building and maintaining a local RAG stack is time-consuming and brittle.
+- **Hallucinations** — When the model can't find something, it may invent plausible-sounding answers.
 
 ## The Solution
 
 Let your local agents chat directly with [**NotebookLM**](https://notebooklm.google/) — Google's **zero-hallucination knowledge base** powered by Gemini that provides intelligent, synthesized answers from designated documents.
 
-```
-Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude does the rest
-```
-
 **The real advantage**: No more manual copy-paste between NotebookLM and your editor. Your agent asks NotebookLM directly and gets answers straight back in the CLI. It builds deep understanding through automatic follow-ups — Claude asks multiple questions in sequence, each building on the last, getting specific implementation details, edge cases, and best practices. You can save NotebookLM links to your local library with tags and descriptions, and Claude automatically selects the relevant notebook based on your current task. And you can use the `ask_question` tool to ask NotebookLM anything you want.
 
 ![notebooklm-tools](docs/notebooklm-tools.png)
+
 ---
 
 ## Why NotebookLM, Not Local RAG?
 
-| Approach | Token Cost | Setup Time | Hallucinations | Answer Quality |
-|----------|------------|------------|----------------|----------------|
-| **Feed docs to Claude** | Very high (multiple file reads) | Instant | Yes - fills gaps | Variable retrieval |
-| **Web search** | Medium | Instant | High - unreliable sources | Hit or miss |
-| **Local RAG** | Medium-High | Hours (embeddings, chunking) | Medium - retrieval gaps | Depends on setup |
-| **NotebookLM MCP** | Minimal | 5 minutes | **Zero** - refuses if unknown | Expert synthesis |
+| Approach            | Token Cost              | Setup Time | Hallucinations              | Answer Quality   |
+|---------------------|-------------------------|------------|-----------------------------|------------------|
+| Feed docs to Claude  | Very high               | Instant    | Yes (fills gaps)            | Variable         |
+| Web search           | Medium                  | Instant    | High (unreliable sources)   | Hit or miss      |
+| Local RAG            | Medium–high             | Hours      | Medium (retrieval gaps)     | Depends on setup |
+| **NotebookLM MCP**   | **Minimal**             | **~5 min** | **Low** (refuses when unsure) | **Expert Synthesized**  |
 
 ---
 
@@ -50,7 +47,7 @@ Your Task → Claude asks NotebookLM → Gemini synthesizes answer → Claude do
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Chrome browser installed
+- Chrome installed
 
 ### Setup
 
@@ -69,6 +66,8 @@ claude mcp add notebooklm -- uv run --directory /path/to/notebooklm-mcp python m
 
 ### Add to Cursor / other MCP clients
 
+Add to your MCP config (e.g. `.mcp.json` or Cursor MCP settings):
+
 ```json
 {
   "mcpServers": {
@@ -86,34 +85,31 @@ claude mcp add notebooklm -- uv run --directory /path/to/notebooklm-mcp python m
 
 ### 1. Authenticate (one-time)
 
-Say in your chat:
-```
-"Log me in to NotebookLM"
-```
-A Chrome window opens — log in with your Google account.
+In chat, say:
+
+> **"Log me in to NotebookLM"**
+
+A Chrome window will open; sign in with your Google account.
 
 ### 2. Create your knowledge base
 
-Go to [notebooklm.google.com](https://notebooklm.google.com) → Create notebook → Upload your docs:
-- PDFs, Google Docs, markdown files
-- Websites, GitHub repos
-- YouTube videos
+1. Go to [notebooklm.google.com](https://notebooklm.google.com).
+2. Create a notebook and add sources: PDFs, Google Docs, markdown, websites, GitHub repos, YouTube videos.
+3. Share it: **Settings → Share → Anyone with link** and copy the link.
 
-Share: **Settings → Share → Anyone with link → Copy**
+### 3. Use it from Claude
 
-### 3. Let Claude use it
+Say something like:
 
-```
-"I'm building with [library]. Here's my NotebookLM: [link]"
-```
+> **"I'm building with [library]. Here's my NotebookLM: [link]"**
 
-Then, Claude will ask about whatever metadata it needs to setup the notebook.
+Claude will ask for any metadata it needs and then use the notebook.
 
 ---
 
 ## Configuration
 
-All settings are controlled via environment variables. $cp `.env.example` to `.env` and edit the file:
+Settings are via environment variables. Copy `.env.example` to `.env` and edit:
 
 ```bash
 # Default notebook URL (optional)
@@ -140,36 +136,36 @@ NOTEBOOKLM_PROFILE=full
 ## Architecture
 
 ```
-Your Request → Claude/Cursor/Codex
-                ↓
-          notebooklm-mcp
-                ↓
-       Playwright + Chrome
-                ↓
-          NotebookLM UI
-                ↓
-              Gemini
-                ↓
-           Your documents, websites, repos, videos, etc.
+Your request  →  Claude / Cursor / Codex
+                        ↕
+                 notebooklm-mcp
+                        ↕
+            Playwright + humanized Chrome
+                        ↕
+                   NotebookLM UI
+                        ↕
+                      Gemini
+                        ↕
+         Your docs, sites, repos, videos, etc.
 ```
 
-Browswer state, chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
+Browwer state, chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
 
 ---
 
 ## Examples
 
-| Intent | Say | Result |
-|--------|-----|--------|
-| Authenticate | *"Log me in to NotebookLM"* | Chrome opens for login |
-| Add notebook | *"Add [notebooklm link] to library"* | Saves notebook with metadata |
-| List notebooks | *"Show our notebooks"* | Lists all saved notebooks |
-| Research first | *"Research this in NotebookLM before coding"* | Multi-question session |
+| Intent          | Say | Result |
+|-----------------|-----|--------|
+| Authenticate    | *"Log me in to NotebookLM"* | Chrome opens for login |
+| Add notebook    | *"Add [notebooklm link] to library"* | Saves notebook with metadata |
+| List notebooks  | *"Show our notebooks"* | Lists saved notebooks |
+| Research first  | *"Research this in NotebookLM before coding"* | Multi-question session |
 | Select notebook | *"Use the React notebook"* | Sets active notebook |
-| View browser | *"Show me the browser"* | Watch live NotebookLM chat |
-| Fix auth | *"Repair NotebookLM authentication"* | Clears and re-authenticates |
-| Switch account | *"Re-authenticate with different Google account"* | Changes Google account |
-| Clean restart | *"Run NotebookLM cleanup"* | Removes all data for fresh start |
+| View browser    | *"Show me the browser"* | Watch live NotebookLM chat |
+| Fix auth        | *"Repair NotebookLM authentication"* | Clears and re-authenticates |
+| Switch account  | *"Re-authenticate with different Google account"* | Changes Google account |
+| Clean restart   | *"Run NotebookLM cleanup"* | Removes all data for fresh start |
 
 ---
 
@@ -188,6 +184,7 @@ Chrome runs locally. Your credentials never leave your machine. Use a dedicated 
 Yes — headless mode is enabled by default. however, say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
 
 ![notebooklm-browser](docs/with_browser_on.png)
+
 ---
 
 ## Disclaimer
