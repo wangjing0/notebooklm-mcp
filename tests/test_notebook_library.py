@@ -168,7 +168,9 @@ class TestUpdateNotebook:
         nb_id = tmp_library_with_notebook.list_notebooks()[0]["id"]
         tmp_library_with_notebook.update_notebook({"id": nb_id, "name": "Persisted Name"})
         library2 = NotebookLibrary()
-        assert library2.get_notebook(nb_id)["name"] == "Persisted Name"
+        nb = library2.get_notebook(nb_id)
+        assert nb is not None
+        assert nb["name"] == "Persisted Name"
 
 
 class TestRemoveNotebook:

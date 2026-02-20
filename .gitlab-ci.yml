@@ -1,8 +1,11 @@
-# Trunk-based CI/CD pipeline
-# - Test stage runs on all pushes and MRs
-# - Single image built with commit SHA tag
-# - Manual deployments add environment-specific tags (development-TIMESTAMP-SHA, staging-TIMESTAMP-SHA, main-TIMESTAMP-SHA)
-# - Flux watches for environment-specific tag patterns and sorts by timestamp
+include:
+  - project: 'accreteai-main/devops/templates/base-gitlabci'
+    file: 'kaniko-build.yaml'
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+default:
+  tags:
+    - private
 
 stages:
   - test
@@ -13,7 +16,7 @@ stages:
   - deploy-prod
 
 variables:
-  SECRET_DETECTION_ENABLED: 'true'
+  COMPONENT: "$CI_PROJECT_NAME"
   IMAGE_NAME: notebooklm-mcp
   DOCKER_IMAGE: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
 
@@ -79,36 +82,28 @@ secret_detection:
   stage: secret-detection
 
 # =============================================================================
-# Build Stage
+# Build Stage — Kaniko
 # =============================================================================
 
-build:
+build-image:
   stage: build
-  image: docker:24.0.5
-  services:
-    - name: docker:24.0.5-dind
-      alias: docker
+  extends: .kaniko-build
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    IMAGE_NAME: "notebooklm-mcp"
+    DOCKERFILE: "Dockerfile"
+    KANIKO_ARGS: >
+      --compressed-caching=false
+      --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
+      --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:cache
   before_script:
-    - echo "Waiting for Docker daemon to start..."
-    - until docker info; do sleep 1; done
-    - echo "Docker daemon is ready"
-    - echo "Logging into GitLab Container Registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - echo "Building Docker image ${DOCKER_IMAGE}"
     - |
-      docker build \
-        --build-arg BUILDKIT_INLINE_CACHE=1 \
-        --cache-from $CI_REGISTRY_IMAGE/$IMAGE_NAME:cache \
-        --tag $DOCKER_IMAGE \
-        --tag $CI_REGISTRY_IMAGE/$IMAGE_NAME:cache \
-        .
-    - echo "Pushing Docker image ${DOCKER_IMAGE}"
-    - docker push $DOCKER_IMAGE
-    - docker push $CI_REGISTRY_IMAGE/$IMAGE_NAME:cache
+      BRANCH_NAME=$(echo "${CI_COMMIT_BRANCH}" | \
+        sed -E 's/[^a-zA-Z0-9_-]+/_/g; s/^[-_]+|[-_]+$//g')
+      if [ -z "$BRANCH_NAME" ]; then
+        BRANCH_NAME="development"
+      fi
+      echo "Using branch name: $BRANCH_NAME"
+    - export VERSION="${BRANCH_NAME}-$(date +%Y%m%d.%H%M%S)-$CI_COMMIT_SHORT_SHA"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -140,7 +135,7 @@ deploy-dev:
     - echo "Pushed $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG - Flux will pick this up"
   environment:
     name: dev
-  needs: [build]
+  needs: [build-image]
   allow_failure: false
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
@@ -175,7 +170,7 @@ deploy-staging:
     - echo "Pushed $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG - Flux will pick this up"
   environment:
     name: staging
-  needs: [build]
+  needs: [build-image]
   allow_failure: false
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
@@ -214,6 +209,3 @@ deploy-prod:
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       when: manual
-
-include:
-  - template: Security/Secret-Detection.gitlab-ci.yml

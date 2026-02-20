@@ -227,7 +227,7 @@ def main_sync() -> None:
     args = sys.argv[1:]
     if args and args[0] == "config":
         cli = CliHandler()
-        asyncio.run(cli.handle_command(args))
+        cli.handle_command(args)
         return
     if args and args[0].startswith("--"):
         from src.mcp_server.cli import main as cli_main

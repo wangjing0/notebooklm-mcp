@@ -1,6 +1,7 @@
 """Tests for TenantManager: cache, isolation, and LRU eviction."""
 
 import time
+
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -111,9 +112,9 @@ class TestLRUEviction:
             t = await mgr.get_tenant(name)
             t.sessions.close_all_sessions = AsyncMock()
         alice_sessions = mgr._tenants["alice"].sessions
-        alice_sessions.last_access = mgr._tenants["alice"].last_access = 0.0
+        mgr._tenants["alice"].last_access = 0.0
         await mgr.get_tenant("dave")
-        alice_sessions.close_all_sessions.assert_called_once()
+        alice_sessions.close_all_sessions.assert_called_once()  # type: ignore[union-attr]
 
 
 class TestIdleEviction:

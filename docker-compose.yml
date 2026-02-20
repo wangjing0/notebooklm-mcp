@@ -1,0 +1,22 @@
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notebooklm-mcp-server
+    ports:
+      - "4200:8000"
+    env_file:
+      - .env
+    volumes:
+      - notebooklm_data:/data
+    networks:
+      - mcp-network
+
+volumes:
+  notebooklm_data:
+    driver: local
+
+networks:
+  mcp-network:
+    driver: bridge
