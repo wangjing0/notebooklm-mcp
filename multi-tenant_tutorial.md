@@ -1,4 +1,4 @@
-# Multi-Tenant MCP Server: End-to-End Tutorial
+# Multi-Tenant MCP Server End-to-End Tutorial
 
 This tutorial walks through the complete lifecycle of a user session against the notebooklm-mcp multi-tenant HTTP server. Every HTTP step shows both a `curl` command and an equivalent Python `requests` snippet, and an example output.
 
@@ -10,7 +10,7 @@ This tutorial walks through the complete lifecycle of a user session against the
 
 ---
 
-## Shared Python Setup
+## Python Setup
 
 All Python examples assume these definitions exist at the top of your script:
 
@@ -472,3 +472,39 @@ resp = requests.post(f"{BASE_URL}/mcp", json={
 }, headers={"Content-Type": "application/json"})
 print(resp.status_code)  # 204
 ```
+
+---
+
+### Storage layout
+
+Data is stored on the local filesystem of the machine running the server. The layout differs between the two modes:
+
+**Single-tenant (stdio)**
+
+All state lives in a single shared directory:
+
+```
+~/Library/Application Support/notebooklm-mcp/
+├── library.json          # notebook library (e.g. context-graph-what-why-now)
+├── browser_state/        # saved Google auth cookies
+└── chrome_profile/       # Chrome user profile
+```
+
+**Multi-tenant (HTTP)**
+
+Each user gets an isolated subdirectory scoped by their `X-User-ID`:
+
+```
+~/Library/Application Support/notebooklm-mcp/
+└── users/
+    ├── alice/
+    │   ├── library.json
+    │   ├── browser_state/
+    │   └── chrome_profile/
+    └── bob/
+        ├── library.json
+        ├── browser_state/
+        └── chrome_profile/
+```
+
+In both modes, notebook metadata and browser auth are persisted to disk across requests. What is **not** persisted is the in-memory session state — open browser tabs, Gemini conversation threads, and `session_id` mappings. These live only in the server process and are lost on restart or tenant eviction.

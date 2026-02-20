@@ -6,7 +6,7 @@
 
 Credits to the original [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) (TypeScript). This is a Python port.
 
-[Installation](#installation) · [Quick Start](#quick-start-in-claude-code) · [Configuration](#configuration) · [Architecture](#architecture) · [Examples](#examples) · [FAQ](#faq) · [Disclaimer](#disclaimer)
+[Installation](#installation) · [Quick Start](#quick-start-in-claude-code) · [Configuration](#configuration) · [Architecture](#architecture) · [Examples](#examples) · [FAQ](#faq) · [Disclaimer](#disclaimer) · [Roadmap](#roadmap)
 
 </div>
 
@@ -173,7 +173,7 @@ Start in multi-tenant mode:
 uv run notebooklm-mcp --transport http --multi-tenant --host 0.0.0.0 --port 8000
 ```
 
-See `docs/tutorial.md` for a complete end-to-end walkthrough with curl and Python examples.
+See [`multi-tenant_tutorial.md`](multi-tenant_tutorial.md) for a complete end-to-end walkthrough with curl and Python examples.
 
 ---
 
@@ -236,4 +236,12 @@ Browser automation is the pragmatic solution for free-tier access. Multiple inde
 
 ## Roadmap
 
-- **Session persistence across restarts** — in both single-tenant (stdio) and multi-tenant (HTTP) modes, in-memory session state is lost when the process exits or a tenant is evicted. A future improvement would serialise active session metadata to disk (or a lightweight store like SQLite) so that sessions can be restored on reconnect rather than requiring a fresh browser login and notebook selection.
+- **Session persistence and recovery** — in both single-tenant (stdio) and multi-tenant (HTTP) modes, in-memory session state is lost when the process exits or a tenant is evicted. A future improvement would serialize active session metadata to disk (or a lightweight store like SQLite) so that sessions can be restored on reconnect rather than requiring a fresh browser login and notebook selection.
+
+- **Reliability** — the browser automation layer is the most fragile part of the stack. NotebookLM UI changes (selectors, page structure) can silently break queries. A self-healing selector strategy and structured failure detection, combined with retry logic for transient browser and network errors, would make the system significantly more resilient across NotebookLM updates.
+
+- **Intelligent notebook routing** — currently the user must explicitly select or pass a `notebook_id`. An agentic routing layer that matches the query against notebook description would let user simply asks a question and have the right notebook selected automatically.
+
+- **Horizontal scaling and shared state** — the current design is fundamentally single-process: `TenantManager` lives in memory and Chrome profiles live on local disk, so two replicas would have diverging tenant state. A shared backing store (session metadata, object storage for Chrome profiles) would unlock horizontal state sharing.
+
+- **Source management** — notebooks can be queried but sources cannot be added or removed programmatically. Browser-automating the source upload flow would close the loop, allowing agents to create notebooks, add documents, and query them end-to-end without any manual steps.
