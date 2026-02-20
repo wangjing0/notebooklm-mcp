@@ -138,7 +138,42 @@ Your request  →  Claude / Cursor / Codex
          Your docs, sites, repos, videos, etc.
 ```
 
-Browwer state, chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
+Browser state and Chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
+
+### Deployment modes
+
+The server supports two deployment modes selectable at startup:
+
+**Single-tenant (stdio)** — the default. One user, one process. State lives in memory for the lifetime of the process. Used when adding the server to Claude Code or Cursor via `claude mcp add`.
+
+**Stateful multi-tenant (HTTP)** — for remote shared deployments. Multiple users share one server process; each user gets fully isolated resources (auth state, notebook library, browser sessions). This is a *stateful multi-tenant MCP server*:
+
+- **Multi-tenant**: every request carries an `X-User-ID` header that routes it to a dedicated `TenantResources` instance — its own auth credentials, notebook library, and browser sessions, with no overlap between users.
+- **Stateful sessions**: browser pages and conversation threads are kept alive between requests. A follow-up question reuses the same open tab and chat context rather than starting from scratch.
+- **LRU eviction**: idle tenants are evicted after a configurable timeout, and the least-recently-used tenant is dropped when the in-memory cap is reached, so the server footprint stays bounded regardless of how many users have ever connected.
+
+```
+User A  ──┐
+User B  ──┼──  POST /mcp  (X-User-ID header)
+User C  ──┘         │
+                    ▼
+            TenantManager (LRU cache of TenantResources)
+                    │
+           ┌────────┬────────┬────────┐
+           │User A  │User B  │User C  │
+           │auth    │auth    │auth    │
+           │library │library │library │
+           │session │session │session │
+           └────────┴────────┴────────┘
+```
+
+Start in multi-tenant mode:
+
+```bash
+uv run notebooklm-mcp --transport http --multi-tenant --host 0.0.0.0 --port 8000
+```
+
+See `docs/tutorial.md` for a complete end-to-end walkthrough with curl and Python examples.
 
 ---
 
@@ -196,3 +231,9 @@ The restriction is intentional: Google uses API access as the primary differenti
 | Other open-source implementation | [open-notebook](https://github.com/lfnovo/open-notebook), [SurfSense](https://github.com/Decentralised-AI/SurfSense-Open-Source-Alternative-to-NotebookLM) | Medium | None — but no NotebookLM-specific features |
 
 Browser automation is the pragmatic solution for free-tier access. Multiple independent projects — [notebooklm_source_automation](https://github.com/DataNath/notebooklm_source_automation), [notebooklm-podcast-automator](https://github.com/upamune/notebooklm-podcast-automator) — use the same approach, as does this project. See also [this community discussion](https://news.ycombinator.com/item?id=41756808) and [the case for a public API](https://medium.com/@kombib/public-notebooklm-api-why-we-need-it-now-7244a5371f57).
+
+---
+
+## Roadmap
+
+- **Session persistence across restarts** — in both single-tenant (stdio) and multi-tenant (HTTP) modes, in-memory session state is lost when the process exits or a tenant is evicted. A future improvement would serialise active session metadata to disk (or a lightweight store like SQLite) so that sessions can be restored on reconnect rather than requiring a fresh browser login and notebook selection.
