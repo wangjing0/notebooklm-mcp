@@ -2,7 +2,7 @@ import asyncio
 import secrets
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG
+from ..config import CONFIG, Config
 from ..types import SessionInfo
 from ..utils.logger import log
 from .browser_session import BrowserSession
@@ -10,12 +10,13 @@ from .shared_context_manager import SharedContextManager
 
 
 class SessionManager:
-    def __init__(self, auth_manager: AuthManager) -> None:
+    def __init__(self, auth_manager: AuthManager, config: Config | None = None) -> None:
+        self._config = config or CONFIG
         self._auth = auth_manager
-        self._shared_ctx = SharedContextManager(auth_manager)
+        self._shared_ctx = SharedContextManager(auth_manager, self._config)
         self._sessions: dict[str, BrowserSession] = {}
-        self._max_sessions = CONFIG.maxSessions
-        self._session_timeout = CONFIG.sessionTimeout
+        self._max_sessions = self._config.maxSessions
+        self._session_timeout = self._config.sessionTimeout
         self._cleanup_task: asyncio.Task | None = None
 
         log.info("SessionManager initialized")
@@ -51,7 +52,7 @@ class SessionManager:
         notebook_url: str | None = None,
         override_headless: bool | None = None,
     ) -> BrowserSession:
-        target_url = (notebook_url or CONFIG.notebookUrl or "").strip()
+        target_url = (notebook_url or self._config.notebookUrl or "").strip()
         if not target_url:
             raise ValueError("Notebook URL is required to create a session")
         if not target_url.startswith("http"):
@@ -84,7 +85,7 @@ class SessionManager:
         log.info(f"Creating new session {session_id}...")
         try:
             await self._shared_ctx.get_or_create_context(override_headless)
-            session = BrowserSession(session_id, self._shared_ctx, self._auth, target_url)
+            session = BrowserSession(session_id, self._shared_ctx, self._auth, target_url, self._config)
             await session.init()
             self._sessions[session_id] = session
             log.success(f"Session {session_id} created ({len(self._sessions)}/{self._max_sessions} active)")

@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from playwright.async_api import BrowserContext, Page
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG
+from ..config import CONFIG, Config
 from ..errors import RateLimitError
 from ..types import ProgressCallback, SessionInfo
 from ..utils.logger import log
@@ -29,7 +29,9 @@ class BrowserSession:
         shared_context_manager: "SharedContextManager",
         auth_manager: AuthManager,
         notebook_url: str,
+        config: Config | None = None,
     ) -> None:
+        self._config = config or CONFIG
         self.session_id = session_id
         self.notebook_url = notebook_url
         self.created_at = time.time()
@@ -66,7 +68,7 @@ class BrowserSession:
             log.success("  Created new page")
 
             log.info(f"  Navigating to: {self.notebook_url}")
-            await self._page.goto(self.notebook_url, wait_until="domcontentloaded", timeout=CONFIG.browserTimeout)
+            await self._page.goto(self.notebook_url, wait_until="domcontentloaded", timeout=self._config.browserTimeout)
             await random_delay(2000, 3000)
 
             is_auth = await self._auth.validate_cookies_expiry(self._context)
@@ -126,9 +128,9 @@ class BrowserSession:
                 log.success("  Auth state loaded successfully")
                 return True
 
-        if CONFIG.autoLoginEnabled:
+        if self._config.autoLoginEnabled:
             success = await self._auth.login_with_credentials(
-                self._context, self._page, CONFIG.loginEmail, CONFIG.loginPassword
+                self._context, self._page, self._config.loginEmail, self._config.loginPassword
             )
             if success:
                 await self._page.goto(self.notebook_url, wait_until="domcontentloaded")

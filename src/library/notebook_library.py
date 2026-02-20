@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from ..config import CONFIG
+from ..config import CONFIG, Config
 from ..utils.logger import log
 from .types import (
     Library,
@@ -19,8 +19,9 @@ def _now_iso() -> str:
 
 
 class NotebookLibrary:
-    def __init__(self) -> None:
-        self._library_path = Path(CONFIG.dataDir) / "library.json"
+    def __init__(self, config: Config | None = None) -> None:
+        self._config = config or CONFIG
+        self._library_path = Path(self._config.dataDir) / "library.json"
         self._library: Library = self._load_library()
         log.info("NotebookLibrary initialized")
         log.info(f"  Library path: {self._library_path}")
@@ -45,21 +46,21 @@ class NotebookLibrary:
 
     def _create_default_library(self) -> Library:
         has_config = bool(
-            CONFIG.notebookUrl
-            and CONFIG.notebookDescription
-            and CONFIG.notebookDescription != "General knowledge base"
+            self._config.notebookUrl
+            and self._config.notebookDescription
+            and self._config.notebookDescription != "General knowledge base"
         )
         notebooks: list = []
         if has_config:
-            entry_id = self._generate_id(CONFIG.notebookDescription, notebooks)
+            entry_id = self._generate_id(self._config.notebookDescription, notebooks)
             notebooks.append({
                 "id": entry_id,
-                "url": CONFIG.notebookUrl,
-                "name": CONFIG.notebookDescription[:50],
-                "description": CONFIG.notebookDescription,
-                "topics": CONFIG.notebookTopics,
-                "content_types": CONFIG.notebookContentTypes,
-                "use_cases": CONFIG.notebookUseCases,
+                "url": self._config.notebookUrl,
+                "name": self._config.notebookDescription[:50],
+                "description": self._config.notebookDescription,
+                "topics": self._config.notebookTopics,
+                "content_types": self._config.notebookContentTypes,
+                "use_cases": self._config.notebookUseCases,
                 "added_at": _now_iso(),
                 "last_used": _now_iso(),
                 "use_count": 0,

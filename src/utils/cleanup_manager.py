@@ -9,9 +9,9 @@ from .logger import log
 
 
 class CleanupManager:
-    def __init__(self) -> None:
+    def __init__(self, data_dir: str | None = None) -> None:
         self._home = Path.home()
-        self._data_dir = Path(user_data_dir("notebooklm-mcp"))
+        self._data_dir = Path(data_dir) if data_dir else Path(user_data_dir("notebooklm-mcp"))
 
     def _path_exists(self, p: Path) -> bool:
         return p.exists()

@@ -3,7 +3,7 @@ import time
 from typing import Any
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG, apply_browser_options
+from ..config import CONFIG, Config, apply_browser_options
 from ..errors import RateLimitError
 from ..library.notebook_library import NotebookLibrary
 from ..session.session_manager import SessionManager
@@ -26,10 +26,12 @@ class ToolHandlers:
         session_manager: SessionManager,
         auth_manager: AuthManager,
         library: NotebookLibrary,
+        config: Config | None = None,
     ) -> None:
         self._sessions = session_manager
         self._auth = auth_manager
         self._library = library
+        self._config = config or CONFIG
 
     async def handle_ask_question(
         self,
@@ -72,11 +74,7 @@ class ToolHandlers:
             if send_progress:
                 await send_progress("Getting or creating browser session...", 1, 5)
 
-            original_headless = CONFIG.headless
-            original_timeout = CONFIG.browserTimeout
-            _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-            CONFIG.headless = _cfg.headless
-            CONFIG.browserTimeout = _cfg.browserTimeout
+            apply_browser_options(self._config, browser_options, show_browser)
 
             override_headless: bool | None = None
             if show_browser is not None:
@@ -86,39 +84,35 @@ class ToolHandlers:
             elif browser_options and browser_options.get("headless") is not None:
                 override_headless = not browser_options["headless"]
 
-            try:
-                session = await self._sessions.get_or_create_session(
-                    session_id, resolved_url, override_headless
-                )
+            session = await self._sessions.get_or_create_session(
+                session_id, resolved_url, override_headless
+            )
 
-                if send_progress:
-                    await send_progress("Asking question to NotebookLM...", 2, 5)
+            if send_progress:
+                await send_progress("Asking question to NotebookLM...", 2, 5)
 
-                raw_answer = await session.ask(question, send_progress)
-                answer = raw_answer.rstrip() + FOLLOW_UP_REMINDER
+            raw_answer = await session.ask(question, send_progress)
+            answer = raw_answer.rstrip() + FOLLOW_UP_REMINDER
 
-                info = session.get_info()
-                result = {
-                    "status": "success",
-                    "question": question,
-                    "answer": answer,
-                    "session_id": session.session_id,
-                    "notebook_url": session.notebook_url,
-                    "session_info": {
-                        "age_seconds": info["age_seconds"],
-                        "message_count": info["message_count"],
-                        "last_activity": info["last_activity"],
-                    },
-                }
+            info = session.get_info()
+            result = {
+                "status": "success",
+                "question": question,
+                "answer": answer,
+                "session_id": session.session_id,
+                "notebook_url": session.notebook_url,
+                "session_info": {
+                    "age_seconds": info["age_seconds"],
+                    "message_count": info["message_count"],
+                    "last_activity": info["last_activity"],
+                },
+            }
 
-                if send_progress:
-                    await send_progress("Question answered successfully!", 5, 5)
+            if send_progress:
+                await send_progress("Question answered successfully!", 5, 5)
 
-                log.success("[TOOL] ask_question completed successfully")
-                return {"success": True, "data": result}
-            finally:
-                CONFIG.headless = original_headless
-                CONFIG.browserTimeout = original_timeout
+            log.success("[TOOL] ask_question completed successfully")
+            return {"success": True, "data": result}
 
         except Exception as e:
             msg = str(e)
@@ -207,14 +201,14 @@ class ToolHandlers:
             result: dict[str, Any] = {
                 "status": "ok",
                 "authenticated": authenticated,
-                "notebook_url": CONFIG.notebookUrl or "not configured",
+                "notebook_url": self._config.notebookUrl or "not configured",
                 "active_sessions": stats["active_sessions"],
                 "max_sessions": stats["max_sessions"],
                 "session_timeout": stats["session_timeout"],
                 "total_messages": stats["total_messages"],
-                "headless": CONFIG.headless,
-                "auto_login_enabled": CONFIG.autoLoginEnabled,
-                "stealth_enabled": CONFIG.stealthEnabled,
+                "headless": self._config.headless,
+                "auto_login_enabled": self._config.autoLoginEnabled,
+                "stealth_enabled": self._config.stealthEnabled,
             }
             if not authenticated:
                 result["troubleshooting_tip"] = (
@@ -241,11 +235,7 @@ class ToolHandlers:
         log.info("[TOOL] setup_auth called")
         start = time.time()
 
-        original_headless = CONFIG.headless
-        original_timeout = CONFIG.browserTimeout
-        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-        CONFIG.headless = _cfg.headless
-        CONFIG.browserTimeout = _cfg.browserTimeout
+        apply_browser_options(self._config, browser_options, show_browser)
 
         try:
             if send_progress:
@@ -276,9 +266,6 @@ class ToolHandlers:
             duration = time.time() - start
             log.error(f"[TOOL] setup_auth failed: {e} ({duration:.1f}s)")
             return {"success": False, "error": str(e)}
-        finally:
-            CONFIG.headless = original_headless
-            CONFIG.browserTimeout = original_timeout
 
     async def handle_re_auth(
         self,
@@ -294,11 +281,7 @@ class ToolHandlers:
         log.info("[TOOL] re_auth called")
         start = time.time()
 
-        original_headless = CONFIG.headless
-        original_timeout = CONFIG.browserTimeout
-        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-        CONFIG.headless = _cfg.headless
-        CONFIG.browserTimeout = _cfg.browserTimeout
+        apply_browser_options(self._config, browser_options, show_browser)
 
         try:
             if send_progress:
@@ -334,9 +317,6 @@ class ToolHandlers:
             duration = time.time() - start
             log.error(f"[TOOL] re_auth failed: {e} ({duration:.1f}s)")
             return {"success": False, "error": str(e)}
-        finally:
-            CONFIG.headless = original_headless
-            CONFIG.browserTimeout = original_timeout
 
     async def handle_add_notebook(self, args: dict) -> dict:
         log.info(f"[TOOL] add_notebook called: {args.get('name')}")
@@ -437,7 +417,7 @@ class ToolHandlers:
         preserve_library: bool = args.get("preserve_library", False)
         log.info(f"[TOOL] cleanup_data called (confirm={confirm}, preserve_library={preserve_library})")
 
-        manager = CleanupManager()
+        manager = CleanupManager(self._config.dataDir)
         try:
             mode = "deep"
             if not confirm:

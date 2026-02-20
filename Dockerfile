@@ -28,10 +28,12 @@ RUN uv sync --frozen --prerelease=allow
 # Install Playwright browsers (Chromium only for notebooklm automation)
 RUN uv run playwright install chromium --with-deps
 
-ENV MCP_TRANSPORT=http
-ENV PORT=8000
+ENV BASE_DATA_DIR=/data
+
+VOLUME ["/data"]
 
 EXPOSE 8000
 
 # Run the MCP server using uv
-CMD ["uv", "run", "--prerelease=allow", "notebooklm-mcp"]
+CMD ["uv", "run", "--prerelease=allow", "notebooklm-mcp", \
+     "--transport", "http", "--multi-tenant", "--host", "0.0.0.0", "--port", "8000"]

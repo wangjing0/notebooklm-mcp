@@ -229,6 +229,10 @@ def main_sync() -> None:
         cli = CliHandler()
         asyncio.run(cli.handle_command(args))
         return
+    if args and args[0].startswith("--"):
+        from src.mcp_server.cli import main as cli_main
+        cli_main(args)
+        return
     main()
 
 

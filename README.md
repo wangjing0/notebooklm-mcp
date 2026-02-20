@@ -69,16 +69,6 @@ claude mcp add notebooklm -- uv run --directory /path/to/notebooklm-mcp python m
 
 Add to your MCP config (e.g. `.mcp.json` or Cursor MCP settings):
 
-```json
-{
-  "mcpServers": {
-    "notebooklm": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/notebooklm-mcp", "python", "main.py"]
-    }
-  }
-}
-```
 
 ---
 
@@ -145,8 +135,6 @@ Your request  →  Claude / Cursor / Codex
                         ↕
                    NotebookLM UI
                         ↕
-                      Gemini
-                        ↕
          Your docs, sites, repos, videos, etc.
 ```
 
@@ -161,7 +149,7 @@ Browwer state, chrome profiles are stored in `~/Library/Application Support/note
 | Authenticate    | *"Log me in to NotebookLM"* | Chrome opens for login |
 | Add notebook    | *"Add [notebooklm link] to library"* | Saves notebook with metadata |
 | List notebooks  | *"Show our notebooks"* | Lists saved notebooks |
-| Research first  | *"Research this in NotebookLM before coding"* | Multi-question session |
+| Research first  | *"Research this in NotebookLM before planning"* | Multi-question session |
 | Select notebook | *"Use the React notebook"* | Sets active notebook |
 | View browser    | *"Show me the browser"* | Watch live NotebookLM chat |
 | Fix auth        | *"Repair NotebookLM authentication"* | Clears and re-authenticates |
@@ -190,7 +178,7 @@ Yes — headless mode is enabled by default. however, say *"Ask NotebookLM '[you
 
 ## Disclaimer
 
-This tool automates browser interactions with NotebookLM using Playwright. Chrome runs in stealth mode — it disguises itself as a regular human-controlled browser by patching automation signals that websites use to detect bots. This is not illegal, but Google may still detect automated usage and rate-limit or block the account. Use a dedicated Google account rather than your primary account. The browser is humanized (realistic typing speed, natural delays, mouse movements) but detection cannot be guaranteed.
+This tool automates browser interactions with NotebookLM using Playwright. Chrome runs in stealth mode — it disguises itself as a regular human-controlled browser by patching automation signals that websites use to detect bots. This is not illegal, but Google may still detect automated usage and rate-limit or block the account. Use a dedicated Google account rather than your primary account.
 
 ### Are there alternatives?
 
@@ -204,7 +192,7 @@ The restriction is intentional: Google uses API access as the primary differenti
 |---|---|---|---|
 | Browser automation (Playwright) | This project | High — mirrors real user behavior | Low — follows ToS spirit |
 | Reverse-engineered internal APIs | [notebooklm-py](https://github.com/teng-lin/notebooklm-py) | Medium — breaks on Google deploys | High — unsupported, undocumented |
-| Enterprise API | [Google Cloud](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/overview) | High | None — but requires enterprise license |
-| Other open-source implementation | [open-notebook](https://github.com/lfnovo/open-notebook), [SurfSense](https://github.com/Decentralised-AI/SurfSense-Open-Source-Alternative-to-NotebookLM) | Medium | None — loses NotebookLM-specific features |
+| Enterprise API | [Google Cloud](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/overview) | High | None — but requires enterprise license $$$ |
+| Other open-source implementation | [open-notebook](https://github.com/lfnovo/open-notebook), [SurfSense](https://github.com/Decentralised-AI/SurfSense-Open-Source-Alternative-to-NotebookLM) | Medium | None — but no NotebookLM-specific features |
 
 Browser automation is the pragmatic solution for free-tier access. Multiple independent projects — [notebooklm_source_automation](https://github.com/DataNath/notebooklm_source_automation), [notebooklm-podcast-automator](https://github.com/upamune/notebooklm-podcast-automator) — use the same approach, as does this project. See also [this community discussion](https://news.ycombinator.com/item?id=41756808) and [the case for a public API](https://medium.com/@kombib/public-notebooklm-api-why-we-need-it-now-7244a5371f57).

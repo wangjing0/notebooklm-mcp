@@ -2,7 +2,7 @@
   "mcpServers": {
     "notebooklm": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/notebooklm-mcp", "python", "main.py"]
+      "args": ["run", "--directory", "/Users/jingwang/Documents/GitHub/aip_kg/notebooklm-mcp", "python", "main.py"]
     },
     "notebooklm-mcp-server": {
       "type": "http",

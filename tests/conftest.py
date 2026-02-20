@@ -6,6 +6,7 @@ import pytest
 
 import src.config
 
+from src.config import ServerConfig, build_tenant_config
 from src.library.notebook_library import NotebookLibrary
 
 
@@ -50,3 +51,27 @@ def mock_auth_manager():
     auth = MagicMock()
     auth.is_authenticated = MagicMock(return_value=False)
     return auth
+
+
+@pytest.fixture
+def server_config(tmp_path):
+    """ServerConfig pointing to a tmp directory."""
+    cfg = ServerConfig()
+    cfg.baseDataDir = str(tmp_path)
+    cfg.maxTenantsInMemory = 5
+    cfg.tenantIdleTimeoutSeconds = 3600
+    return cfg
+
+
+@pytest.fixture
+def tenant_config(server_config):
+    """A per-user Config derived from server_config."""
+    return build_tenant_config(server_config, "test-user")
+
+
+@pytest.fixture
+def tenant_library(tenant_config):
+    """NotebookLibrary backed by the tenant's isolated directory."""
+    from pathlib import Path
+    Path(tenant_config.dataDir).mkdir(parents=True, exist_ok=True)
+    return NotebookLibrary(tenant_config)

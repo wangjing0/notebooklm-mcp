@@ -37,8 +37,8 @@ _DEFAULT_SETTINGS = {
 
 
 class SettingsManager:
-    def __init__(self) -> None:
-        self._settings_path = Path(CONFIG.configDir) / "settings.json"
+    def __init__(self, config_dir: str | None = None) -> None:
+        self._settings_path = Path(config_dir or CONFIG.configDir) / "settings.json"
         self._settings = self._load_settings()
 
     def _load_settings(self) -> dict:

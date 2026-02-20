@@ -8,7 +8,7 @@ from pathlib import Path
 
 from playwright.async_api import BrowserContext, Page
 
-from ..config import CONFIG, NOTEBOOKLM_AUTH_URL
+from ..config import CONFIG, NOTEBOOKLM_AUTH_URL, Config
 from ..types import ProgressCallback
 from ..utils.logger import log
 from ..utils.stealth_utils import (
@@ -26,9 +26,10 @@ CRITICAL_COOKIE_NAMES = [
 
 
 class AuthManager:
-    def __init__(self) -> None:
-        self._state_path = Path(CONFIG.browserStateDir) / "state.json"
-        self._session_path = Path(CONFIG.browserStateDir) / "session.json"
+    def __init__(self, config: Config | None = None) -> None:
+        self._config = config or CONFIG
+        self._state_path = Path(self._config.browserStateDir) / "state.json"
+        self._session_path = Path(self._config.browserStateDir) / "session.json"
 
     async def save_browser_state(self, context: BrowserContext, page: Page | None = None) -> bool:
         try:
@@ -201,13 +202,13 @@ class AuthManager:
         log.warning(f"Attempting automatic login for {masked}...")
 
         try:
-            await page.goto(NOTEBOOKLM_AUTH_URL, wait_until="domcontentloaded", timeout=CONFIG.browserTimeout)
+            await page.goto(NOTEBOOKLM_AUTH_URL, wait_until="domcontentloaded", timeout=self._config.browserTimeout)
         except Exception:
             log.warning("Page load timeout (continuing anyway)")
 
-        deadline = time.time() + CONFIG.autoLoginTimeoutMs / 1000
+        deadline = time.time() + self._config.autoLoginTimeoutMs / 1000
 
-        if await self._wait_for_notebook(page, CONFIG.autoLoginTimeoutMs):
+        if await self._wait_for_notebook(page, self._config.autoLoginTimeoutMs):
             log.success("Already authenticated")
             await self.save_browser_state(context, page)
             return True
@@ -216,7 +217,7 @@ class AuthManager:
 
         if await self._handle_account_chooser(page, email):
             log.success("Account selected from chooser")
-            if await self._wait_for_notebook(page, CONFIG.autoLoginTimeoutMs):
+            if await self._wait_for_notebook(page, self._config.autoLoginTimeoutMs):
                 log.success("Automatic login successful")
                 await self.save_browser_state(context, page)
                 return True
@@ -244,7 +245,7 @@ class AuthManager:
 
         log.error("Automatic login timed out")
         try:
-            screenshot_path = Path(CONFIG.dataDir) / f"login_failed_{int(time.time())}.png"
+            screenshot_path = Path(self._config.dataDir) / f"login_failed_{int(time.time())}.png"
             await page.screenshot(path=str(screenshot_path))
             log.info(f"Screenshot saved: {screenshot_path}")
         except Exception:
@@ -368,10 +369,10 @@ class AuthManager:
 
             async with async_playwright() as pw:
                 context = await pw.chromium.launch_persistent_context(
-                    CONFIG.chromeProfileDir,
+                    self._config.chromeProfileDir,
                     headless=not show_browser,
                     channel="chrome",
-                    viewport={"width": CONFIG.viewport.width, "height": CONFIG.viewport.height},
+                    viewport={"width": self._config.viewport.width, "height": self._config.viewport.height},
                     locale="en-US",
                     timezone_id="Europe/Berlin",
                     args=[
@@ -401,7 +402,7 @@ class AuthManager:
     async def clear_all_auth_data(self) -> None:
         log.warning("Clearing ALL authentication data...")
         deleted = 0
-        state_dir = Path(CONFIG.browserStateDir)
+        state_dir = Path(self._config.browserStateDir)
         try:
             if state_dir.exists():
                 for f in state_dir.iterdir():
@@ -412,7 +413,7 @@ class AuthManager:
         except Exception as e:
             log.warning(f"Could not delete state files: {e}")
 
-        chrome_dir = Path(CONFIG.chromeProfileDir)
+        chrome_dir = Path(self._config.chromeProfileDir)
         try:
             if chrome_dir.exists():
                 shutil.rmtree(chrome_dir, ignore_errors=True)
@@ -448,7 +449,7 @@ class AuthManager:
                 except Exception:
                     pass
 
-            state_dir = Path(CONFIG.browserStateDir)
+            state_dir = Path(self._config.browserStateDir)
             if state_dir.exists():
                 for f in state_dir.iterdir():
                     try:
