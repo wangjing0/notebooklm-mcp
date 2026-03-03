@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "notebooklm": {
+      "command": "uv",
+      "args": ["run", "--directory", "/Users/jingwang/Documents/GitHub/aip_kg/notebooklm-mcp", "python", "main.py"]
+    },
+    "notebooklm-mcp-server": {
+      "type": "http",
+      "url": "https://notebooklm-mcp.wrk.ue2.dev.aws.accrete.sh/mcp"
+    }
+  }
+}

@@ -1,9 +1,9 @@
 import asyncio
-from typing import Optional
 
 from playwright.async_api import Page
 
 from .logger import log
+
 
 RESPONSE_SELECTORS = [
     ".to-user-container .message-text-content",
@@ -53,9 +53,9 @@ async def snapshot_all_responses(page: Page) -> list[str]:
 async def _extract_latest_text(
     page: Page,
     known_hashes: set,
-    debug: bool,
-    poll_count: int,
-) -> Optional[str]:
+    _debug: bool,
+    _poll_count: int,
+) -> str | None:
     try:
         containers = await page.query_selector_all(".to-user-container")
         total = len(containers)
@@ -100,9 +100,9 @@ async def wait_for_latest_answer(
     question: str = "",
     timeout_ms: int = 120000,
     poll_interval_ms: int = 1000,
-    ignore_texts: Optional[list[str]] = None,
+    ignore_texts: list[str] | None = None,
     debug: bool = False,
-) -> Optional[str]:
+) -> str | None:
     import time
 
     deadline = time.time() + timeout_ms / 1000
@@ -113,7 +113,7 @@ async def wait_for_latest_answer(
             known_hashes.add(_hash_string(text.strip()))
 
     poll_count = 0
-    last_candidate: Optional[str] = None
+    last_candidate: str | None = None
     stable_count = 0
     required_stable = 3
 

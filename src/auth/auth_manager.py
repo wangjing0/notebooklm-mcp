@@ -1,17 +1,23 @@
 import asyncio
+import contextlib
 import json
-import os
 import shutil
 import time
+
 from pathlib import Path
-from typing import Optional
 
 from playwright.async_api import BrowserContext, Page
 
-from ..config import CONFIG, NOTEBOOKLM_AUTH_URL
+from ..config import CONFIG, NOTEBOOKLM_AUTH_URL, Config
 from ..types import ProgressCallback
 from ..utils.logger import log
-from ..utils.stealth_utils import human_type, random_delay, random_mouse_movement, realistic_click
+from ..utils.stealth_utils import (
+    human_type,
+    random_delay,
+    random_mouse_movement,
+    realistic_click,
+)
+
 
 CRITICAL_COOKIE_NAMES = [
     "SID", "HSID", "SSID", "APISID", "SAPISID",
@@ -20,11 +26,12 @@ CRITICAL_COOKIE_NAMES = [
 
 
 class AuthManager:
-    def __init__(self) -> None:
-        self._state_path = Path(CONFIG.browserStateDir) / "state.json"
-        self._session_path = Path(CONFIG.browserStateDir) / "session.json"
+    def __init__(self, config: Config | None = None) -> None:
+        self._config = config or CONFIG
+        self._state_path = Path(self._config.browserStateDir) / "state.json"
+        self._session_path = Path(self._config.browserStateDir) / "session.json"
 
-    async def save_browser_state(self, context: BrowserContext, page: Optional[Page] = None) -> bool:
+    async def save_browser_state(self, context: BrowserContext, page: Page | None = None) -> bool:
         try:
             await context.storage_state(path=str(self._state_path))
             if page:
@@ -52,10 +59,10 @@ class AuthManager:
     def has_saved_state(self) -> bool:
         return self._state_path.exists()
 
-    def get_state_path(self) -> Optional[str]:
+    def get_state_path(self) -> str | None:
         return str(self._state_path) if self._state_path.exists() else None
 
-    async def get_valid_state_path(self) -> Optional[str]:
+    async def get_valid_state_path(self) -> str | None:
         if not self.has_saved_state():
             return None
         if await self.is_state_expired():
@@ -63,7 +70,7 @@ class AuthManager:
             return None
         return str(self._state_path)
 
-    async def load_session_storage(self) -> Optional[dict]:
+    async def load_session_storage(self) -> dict | None:
         try:
             data = self._session_path.read_text(encoding="utf-8")
             session_data = json.loads(data)
@@ -87,7 +94,7 @@ class AuthManager:
             for cookie in google_cookies:
                 expires = cookie.get("expires", -1)
                 if expires is not None and expires != -1 and expires < current_time:
-                    log.warning(f"Cookie '{cookie['name']}' has expired")
+                    log.warning(f"Cookie '{cookie.get('name', '')}' has expired")
                     return False
             log.success("State validation passed")
             return True
@@ -110,7 +117,7 @@ class AuthManager:
             for c in critical:
                 expires = c.get("expires", -1)
                 if expires is not None and expires != -1 and expires < current_time:
-                    expired.append(c["name"])
+                    expired.append(c.get("name", ""))
             if expired:
                 log.warning(f"Expired cookies: {', '.join(expired)}")
                 return False
@@ -131,7 +138,7 @@ class AuthManager:
         except Exception:
             return True
 
-    async def perform_login(self, page: Page, send_progress: Optional[ProgressCallback] = None) -> bool:
+    async def perform_login(self, page: Page, send_progress: ProgressCallback | None = None) -> bool:
         try:
             log.info("Opening Google login page...")
             if send_progress:
@@ -195,13 +202,13 @@ class AuthManager:
         log.warning(f"Attempting automatic login for {masked}...")
 
         try:
-            await page.goto(NOTEBOOKLM_AUTH_URL, wait_until="domcontentloaded", timeout=CONFIG.browserTimeout)
+            await page.goto(NOTEBOOKLM_AUTH_URL, wait_until="domcontentloaded", timeout=self._config.browserTimeout)
         except Exception:
             log.warning("Page load timeout (continuing anyway)")
 
-        deadline = time.time() + CONFIG.autoLoginTimeoutMs / 1000
+        deadline = time.time() + self._config.autoLoginTimeoutMs / 1000
 
-        if await self._wait_for_notebook(page, CONFIG.autoLoginTimeoutMs):
+        if await self._wait_for_notebook(page, self._config.autoLoginTimeoutMs):
             log.success("Already authenticated")
             await self.save_browser_state(context, page)
             return True
@@ -210,7 +217,7 @@ class AuthManager:
 
         if await self._handle_account_chooser(page, email):
             log.success("Account selected from chooser")
-            if await self._wait_for_notebook(page, CONFIG.autoLoginTimeoutMs):
+            if await self._wait_for_notebook(page, self._config.autoLoginTimeoutMs):
                 log.success("Automatic login successful")
                 await self.save_browser_state(context, page)
                 return True
@@ -238,7 +245,7 @@ class AuthManager:
 
         log.error("Automatic login timed out")
         try:
-            screenshot_path = Path(CONFIG.dataDir) / f"login_failed_{int(time.time())}.png"
+            screenshot_path = Path(self._config.dataDir) / f"login_failed_{int(time.time())}.png"
             await page.screenshot(path=str(screenshot_path))
             log.info(f"Screenshot saved: {screenshot_path}")
         except Exception:
@@ -345,7 +352,7 @@ class AuthManager:
                 continue
         return False
 
-    async def perform_setup(self, send_progress: Optional[ProgressCallback] = None, override_headless: Optional[bool] = None) -> bool:
+    async def perform_setup(self, send_progress: ProgressCallback | None = None, override_headless: bool | None = None) -> bool:
         from playwright.async_api import async_playwright
 
         show_browser = override_headless if override_headless is not None else True
@@ -362,10 +369,10 @@ class AuthManager:
 
             async with async_playwright() as pw:
                 context = await pw.chromium.launch_persistent_context(
-                    CONFIG.chromeProfileDir,
+                    self._config.chromeProfileDir,
                     headless=not show_browser,
                     channel="chrome",
-                    viewport={"width": CONFIG.viewport.width, "height": CONFIG.viewport.height},
+                    viewport={"width": self._config.viewport.width, "height": self._config.viewport.height},
                     locale="en-US",
                     timezone_id="Europe/Berlin",
                     args=[
@@ -395,7 +402,7 @@ class AuthManager:
     async def clear_all_auth_data(self) -> None:
         log.warning("Clearing ALL authentication data...")
         deleted = 0
-        state_dir = Path(CONFIG.browserStateDir)
+        state_dir = Path(self._config.browserStateDir)
         try:
             if state_dir.exists():
                 for f in state_dir.iterdir():
@@ -406,7 +413,7 @@ class AuthManager:
         except Exception as e:
             log.warning(f"Could not delete state files: {e}")
 
-        chrome_dir = Path(CONFIG.chromeProfileDir)
+        chrome_dir = Path(self._config.chromeProfileDir)
         try:
             if chrome_dir.exists():
                 shutil.rmtree(chrome_dir, ignore_errors=True)
@@ -423,10 +430,8 @@ class AuthManager:
     async def clear_state(self) -> bool:
         try:
             for p in (self._state_path, self._session_path):
-                try:
+                with contextlib.suppress(Exception):
                     p.unlink()
-                except Exception:
-                    pass
             log.success("Authentication state cleared")
             return True
         except Exception as e:
@@ -444,7 +449,7 @@ class AuthManager:
                 except Exception:
                     pass
 
-            state_dir = Path(CONFIG.browserStateDir)
+            state_dir = Path(self._config.browserStateDir)
             if state_dir.exists():
                 for f in state_dir.iterdir():
                     try:

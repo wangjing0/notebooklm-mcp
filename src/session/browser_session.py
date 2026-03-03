@@ -1,18 +1,20 @@
+import contextlib
 import re
-import secrets
 import time
-from typing import TYPE_CHECKING, Optional
+
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from playwright.async_api import BrowserContext, Page
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG
+from ..config import CONFIG, Config
 from ..errors import RateLimitError
 from ..types import ProgressCallback, SessionInfo
 from ..utils.logger import log
 from ..utils.page_utils import snapshot_all_responses, wait_for_latest_answer
 from ..utils.stealth_utils import human_type, random_delay
+
 
 if TYPE_CHECKING:
     from .shared_context_manager import SharedContextManager
@@ -27,7 +29,9 @@ class BrowserSession:
         shared_context_manager: "SharedContextManager",
         auth_manager: AuthManager,
         notebook_url: str,
+        config: Config | None = None,
     ) -> None:
+        self._config = config or CONFIG
         self.session_id = session_id
         self.notebook_url = notebook_url
         self.created_at = time.time()
@@ -36,8 +40,8 @@ class BrowserSession:
 
         self._shared_ctx = shared_context_manager
         self._auth = auth_manager
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
+        self._context: BrowserContext | None = None
+        self._page: Page | None = None
         self._initialized = False
 
         log.info(f"BrowserSession {session_id} created")
@@ -64,7 +68,7 @@ class BrowserSession:
             log.success("  Created new page")
 
             log.info(f"  Navigating to: {self.notebook_url}")
-            await self._page.goto(self.notebook_url, wait_until="domcontentloaded", timeout=CONFIG.browserTimeout)
+            await self._page.goto(self.notebook_url, wait_until="domcontentloaded", timeout=self._config.browserTimeout)
             await random_delay(2000, 3000)
 
             is_auth = await self._auth.validate_cookies_expiry(self._context)
@@ -89,10 +93,8 @@ class BrowserSession:
         except Exception as e:
             log.error(f"Failed to initialize session {self.session_id}: {e}")
             if self._page:
-                try:
+                with contextlib.suppress(Exception):
                     await self._page.close()
-                except Exception:
-                    pass
                 self._page = None
             raise
 
@@ -108,7 +110,7 @@ class BrowserSession:
                 log.success("  Chat input ready (fallback)!")
             except Exception as e:
                 log.error(f"  NotebookLM interface not ready: {e}")
-                raise RuntimeError("Could not find NotebookLM chat input. Please ensure the notebook page has loaded correctly.")
+                raise RuntimeError("Could not find NotebookLM chat input. Please ensure the notebook page has loaded correctly.") from e
 
     async def _ensure_authenticated(self) -> bool:
         if not self._page or not self._context:
@@ -126,9 +128,9 @@ class BrowserSession:
                 log.success("  Auth state loaded successfully")
                 return True
 
-        if CONFIG.autoLoginEnabled:
+        if self._config.autoLoginEnabled:
             success = await self._auth.login_with_credentials(
-                self._context, self._page, CONFIG.loginEmail, CONFIG.loginPassword
+                self._context, self._page, self._config.loginEmail, self._config.loginPassword
             )
             if success:
                 await self._page.goto(self.notebook_url, wait_until="domcontentloaded")
@@ -151,7 +153,7 @@ class BrowserSession:
         except Exception as e:
             log.warning(f"  Failed to restore sessionStorage: {e}")
 
-    def _origin(self, url: str) -> Optional[str]:
+    def _origin(self, url: str) -> str | None:
         try:
             p = urlparse(url)
             return f"{p.scheme}://{p.netloc}"
@@ -169,7 +171,7 @@ class BrowserSession:
         except Exception:
             return True
 
-    async def ask(self, question: str, send_progress: Optional[ProgressCallback] = None) -> str:
+    async def ask(self, question: str, send_progress: ProgressCallback | None = None) -> str:
         async def ask_once() -> str:
             if not self._initialized or self._page_is_closed():
                 log.warning("  Session not initialized or page missing - re-initializing...")
@@ -181,6 +183,7 @@ class BrowserSession:
             if send_progress:
                 await send_progress("Verifying authentication...", 2, 5)
 
+            assert self._context is not None
             if not await self._auth.validate_cookies_expiry(self._context):
                 log.warning("  Session expired, re-authenticating...")
                 if send_progress:
@@ -236,10 +239,8 @@ class BrowserSession:
                 try:
                     self._initialized = False
                     if self._page:
-                        try:
+                        with contextlib.suppress(Exception):
                             await self._page.close()
-                        except Exception:
-                            pass
                     self._page = None
                     await self.init()
                     return await ask_once()
@@ -249,7 +250,7 @@ class BrowserSession:
             log.error(f"Failed to ask question: {msg}")
             raise
 
-    async def _find_chat_input(self) -> Optional[str]:
+    async def _find_chat_input(self) -> str | None:
         if not self._page:
             return None
         for sel in ["textarea.query-box-input", 'textarea[aria-label="Feld für Anfragen"]']:
@@ -304,10 +305,8 @@ class BrowserSession:
                 log.warning("  Detected closed page/context during reset. Recovering...")
                 self._initialized = False
                 if self._page:
-                    try:
+                    with contextlib.suppress(Exception):
                         await self._page.close()
-                    except Exception:
-                        pass
                 self._page = None
                 await self.init()
                 await reset_once()

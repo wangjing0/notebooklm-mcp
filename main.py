@@ -2,195 +2,355 @@
 import asyncio
 import json
 import sys
-from typing import Any, Optional
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from typing import Any
+
+from fastmcp import FastMCP
 
 from src.auth.auth_manager import AuthManager
 from src.config import CONFIG
 from src.library.notebook_library import NotebookLibrary
 from src.session.session_manager import SessionManager
-from src.tools import ToolHandlers, build_tool_definitions
+from src.tools import ToolHandlers
 from src.utils.cli_handler import CliHandler
 from src.utils.logger import log
-from src.utils.settings_manager import SettingsManager
 
 
-class NotebookLMMCPServer:
-    def __init__(self) -> None:
-        self._server: Server = Server("notebooklm-mcp")
-        self._auth = AuthManager()
-        self._sessions = SessionManager(self._auth)
-        self._library = NotebookLibrary()
-        self._settings = SettingsManager()
-        self._handlers = ToolHandlers(self._sessions, self._auth, self._library)
+mcp = FastMCP("notebooklm-mcp")
 
-        all_tools = build_tool_definitions(self._library)
-        self._tools: list[Tool] = self._settings.filter_tools(all_tools)
-
-        self._setup_handlers()
-        effective = self._settings.get_effective_settings()
-        log.info("NotebookLM MCP Server initialized")
-        log.info("  Version: 1.1.0")
-        log.info(f"  Python: {sys.version.split()[0]}")
-        log.info(f"  Platform: {sys.platform}")
-        log.info(f"  Profile: {effective['profile']} ({len(self._tools)} tools active)")
-
-    def _setup_handlers(self) -> None:
-        server = self._server
-
-        @server.list_tools()
-        async def list_tools() -> list[Tool]:
-            log.info("[MCP] list_tools request received")
-            return self._tools
-
-        @server.call_tool()
-        async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-            log.info(f"[MCP] Tool call: {name}")
-            progress_token = (arguments or {}).get("_meta", {}).get("progressToken")
-
-            async def send_progress(message: str, progress: Optional[int] = None, total: Optional[int] = None) -> None:
-                if progress_token is not None:
-                    params: dict[str, Any] = {"progressToken": progress_token, "message": message}
-                    if progress is not None:
-                        params["progress"] = progress
-                    if total is not None:
-                        params["total"] = total
-                    await server.request_context.session.send_progress_notification(**params)
-                    log.dim(f"  Progress: {message}")
-
-            try:
-                result = await self._dispatch(name, arguments or {}, send_progress)
-            except Exception as e:
-                log.error(f"[MCP] Tool execution error: {e}")
-                result = {"success": False, "error": str(e)}
-
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
-    async def _dispatch(self, name: str, args: dict, send_progress: Any) -> dict:
-        match name:
-            case "ask_question":
-                return await self._handlers.handle_ask_question(args, send_progress)
-            case "list_sessions":
-                return await self._handlers.handle_list_sessions()
-            case "close_session":
-                return await self._handlers.handle_close_session(args)
-            case "reset_session":
-                return await self._handlers.handle_reset_session(args)
-            case "get_health":
-                return await self._handlers.handle_get_health()
-            case "setup_auth":
-                return await self._handlers.handle_setup_auth(args, send_progress)
-            case "re_auth":
-                return await self._handlers.handle_re_auth(args, send_progress)
-            case "add_notebook":
-                return await self._handlers.handle_add_notebook(args)
-            case "list_notebooks":
-                return await self._handlers.handle_list_notebooks()
-            case "get_notebook":
-                return await self._handlers.handle_get_notebook(args)
-            case "select_notebook":
-                return await self._handlers.handle_select_notebook(args)
-            case "update_notebook":
-                return await self._handlers.handle_update_notebook(args)
-            case "remove_notebook":
-                return await self._handlers.handle_remove_notebook(args)
-            case "search_notebooks":
-                return await self._handlers.handle_search_notebooks(args)
-            case "get_library_stats":
-                return await self._handlers.handle_get_library_stats()
-            case "cleanup_data":
-                return await self._handlers.handle_cleanup_data(args)
-            case _:
-                log.error(f"[MCP] Unknown tool: {name}")
-                return {"success": False, "error": f"Unknown tool: {name}"}
-
-    async def run(self) -> None:
-        log.info("Starting NotebookLM MCP Server...")
-        log.info("")
-        log.info("Configuration:")
-        log.info(f"  Config Dir: {CONFIG.configDir}")
-        log.info(f"  Data Dir: {CONFIG.dataDir}")
-        log.info(f"  Headless: {CONFIG.headless}")
-        log.info(f"  Max Sessions: {CONFIG.maxSessions}")
-        log.info(f"  Session Timeout: {CONFIG.sessionTimeout}s")
-        log.info(f"  Stealth: {CONFIG.stealthEnabled}")
-        log.info("")
-
-        async with stdio_server() as streams:
-            read_stream, write_stream = streams
-            log.success("MCP Server connected via stdio")
-            log.success("Ready to receive requests from Claude Code!")
-            log.info("")
-            log.info("Available tools:")
-            for tool in self._tools:
-                desc = (tool.description or "No description").split("\n")[0]
-                log.info(f"  - {tool.name}: {desc[:80]}...")
-            log.info("")
-            await self._server.run(
-                read_stream,
-                write_stream,
-                self._server.create_initialization_options(),
-            )
+_auth = AuthManager()
+_sessions = SessionManager(_auth)
+_library = NotebookLibrary()
+_handlers = ToolHandlers(_sessions, _auth, _library)
 
 
-async def main() -> None:
-    args = sys.argv[1:]
-    if args and args[0] == "config":
-        cli = CliHandler()
-        await cli.handle_command(args)
-        return
+@mcp.tool()
+async def ask_question(
+    question: str,
+    session_id: str | None = None,
+    notebook_id: str | None = None,
+    notebook_url: str | None = None,
+    show_browser: bool | None = None,
+    browser_options: dict[str, Any] | None = None,
+) -> str:
+    """Conversational research partner using NotebookLM with Gemini AI.
 
-    sys.stderr.write("╔══════════════════════════════════════════════════════════╗\n")
-    sys.stderr.write("║                                                          ║\n")
-    sys.stderr.write("║           NotebookLM MCP Server v1.1.0                   ║\n")
-    sys.stderr.write("║                                                          ║\n")
-    sys.stderr.write("║      Chat with Gemini through NotebookLM via MCP         ║\n")
-    sys.stderr.write("║                                                          ║\n")
-    sys.stderr.write("╚══════════════════════════════════════════════════════════╝\n")
-    sys.stderr.write("\n")
+    Asks questions to your NotebookLM notebook and returns source-grounded answers.
+    Sessions maintain context for follow-up questions — always prefer continuing
+    an existing session for the same task.
 
-    import signal
+    For authentication issues, use setup_auth and verify with get_health.
+    """
+    result = await _handlers.handle_ask_question({
+        "question": question,
+        "session_id": session_id,
+        "notebook_id": notebook_id,
+        "notebook_url": notebook_url,
+        "show_browser": show_browser,
+        "browser_options": browser_options,
+    })
+    return json.dumps(result, indent=2)
 
-    server: Optional["NotebookLMMCPServer"] = None
 
-    def _make_shutdown_handler(sig_name: str):
-        def _handler():
-            log.info(f"\nReceived {sig_name}, shutting down gracefully...")
-            if server is not None:
-                loop = asyncio.get_event_loop()
-                loop.create_task(_graceful_exit(server))
-        return _handler
+@mcp.tool()
+async def list_sessions() -> str:
+    """List all active browser sessions with stats (age, message count, last activity)."""
+    result = await _handlers.handle_list_sessions()
+    return json.dumps(result, indent=2)
 
-    async def _graceful_exit(srv: "NotebookLMMCPServer") -> None:
-        try:
-            await srv._handlers.cleanup()
-        except Exception:
-            pass
-        log.success("Shutdown complete")
-        sys.exit(0)
 
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, _make_shutdown_handler(sig.name))
-        except NotImplementedError:
-            pass
+@mcp.tool()
+async def close_session(session_id: str) -> str:
+    """Close a specific session by session ID."""
+    result = await _handlers.handle_close_session({"session_id": session_id})
+    return json.dumps(result, indent=2)
 
-    try:
-        server = NotebookLMMCPServer()
-        await server.run()
-    except Exception as e:
-        log.error(f"Fatal error starting server: {e}")
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        sys.exit(1)
+
+@mcp.tool()
+async def reset_session(session_id: str) -> str:
+    """Reset a session's chat history while keeping the same session ID."""
+    result = await _handlers.handle_reset_session({"session_id": session_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_health() -> str:
+    """Get server health status including authentication state and active sessions."""
+    result = await _handlers.handle_get_health()
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def setup_auth(
+    show_browser: bool | None = None,
+    browser_options: dict[str, Any] | None = None,
+) -> str:
+    """Open a browser window for Google authentication to access NotebookLM."""
+    result = await _handlers.handle_setup_auth(
+        {"show_browser": show_browser, "browser_options": browser_options}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def re_auth(
+    show_browser: bool | None = None,
+    browser_options: dict[str, Any] | None = None,
+) -> str:
+    """Switch Google accounts or re-authenticate with a fresh browser session."""
+    result = await _handlers.handle_re_auth(
+        {"show_browser": show_browser, "browser_options": browser_options}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_notebook(
+    url: str,
+    name: str,
+    description: str,
+    topics: list[str],
+    content_types: list[str] | None = None,
+    use_cases: list[str] | None = None,
+    tags: list[str] | None = None,
+) -> str:
+    """Add a NotebookLM notebook to your library. Requires explicit user permission."""
+    result = await _handlers.handle_add_notebook({
+        "url": url,
+        "name": name,
+        "description": description,
+        "topics": topics,
+        "content_types": content_types,
+        "use_cases": use_cases,
+        "tags": tags,
+    })
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def list_notebooks() -> str:
+    """List all library notebooks with metadata (name, topics, use cases, URL)."""
+    result = await _handlers.handle_list_notebooks()
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_notebook(id: str) -> str:
+    """Get detailed information about a specific notebook by ID."""
+    result = await _handlers.handle_get_notebook({"id": id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def select_notebook(id: str) -> str:
+    """Set a notebook as the active default for ask_question."""
+    result = await _handlers.handle_select_notebook({"id": id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def update_notebook(
+    id: str,
+    name: str | None = None,
+    description: str | None = None,
+    topics: list[str] | None = None,
+    content_types: list[str] | None = None,
+    use_cases: list[str] | None = None,
+    tags: list[str] | None = None,
+    url: str | None = None,
+) -> str:
+    """Update notebook metadata. Requires user confirmation before calling."""
+    result = await _handlers.handle_update_notebook({
+        "id": id,
+        "name": name,
+        "description": description,
+        "topics": topics,
+        "content_types": content_types,
+        "use_cases": use_cases,
+        "tags": tags,
+        "url": url,
+    })
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def remove_notebook(id: str) -> str:
+    """Remove a notebook from the library. Requires explicit user confirmation."""
+    result = await _handlers.handle_remove_notebook({"id": id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def search_notebooks(query: str) -> str:
+    """Search library notebooks by name, description, topics, or tags."""
+    result = await _handlers.handle_search_notebooks({"query": query})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_library_stats() -> str:
+    """Get statistics about your notebook library (total notebooks, usage, etc.)."""
+    result = await _handlers.handle_get_library_stats()
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def cleanup_data(
+    confirm: bool,
+    preserve_library: bool = False,
+) -> str:
+    """Deep cleanup of all NotebookLM MCP data files. Shows preview before deletion."""
+    result = await _handlers.handle_cleanup_data(
+        {"confirm": confirm, "preserve_library": preserve_library}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def list_sources(notebook_id: str) -> str:
+    """List all sources in a notebook.
+
+    Returns source IDs, titles, URLs, and processing status.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_list_sources({"notebook_id": notebook_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_url(notebook_id: str, url: str) -> str:
+    """Add a web URL or YouTube video as a source in a notebook.
+
+    Automatically detects YouTube URLs and handles them appropriately.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_url({"notebook_id": notebook_id, "url": url})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_text(notebook_id: str, title: str, content: str) -> str:
+    """Add pasted text as a source in a notebook.
+
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_text(
+        {"notebook_id": notebook_id, "title": title, "content": content}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_file(notebook_id: str, file_path: str) -> str:
+    """Upload a local file (PDF, DOCX, TXT, MD, etc.) as a source in a notebook.
+
+    The file_path must be an absolute path to an existing local file.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_file(
+        {"notebook_id": notebook_id, "file_path": file_path}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def delete_source(notebook_id: str, source_id: str) -> str:
+    """Remove a source from a notebook by source ID.
+
+    Use list_sources to get the source ID.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_delete_source(
+        {"notebook_id": notebook_id, "source_id": source_id}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def start_research(
+    notebook_id: str,
+    query: str,
+    source: str = "web",
+    mode: str = "fast",
+) -> str:
+    """Start a research session to discover sources for a query.
+
+    Args:
+        notebook_id: Library notebook ID.
+        query: Research query string.
+        source: "web" for web search or "drive" for Google Drive search.
+        mode: "fast" for quick results or "deep" for thorough analysis.
+
+    Returns the task_id. Use get_research_status to poll for results,
+    then import_research_sources to add discovered sources to the notebook.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_start_research(
+        {"notebook_id": notebook_id, "query": query, "source": source, "mode": mode}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_research_status(notebook_id: str) -> str:
+    """Poll current research tasks for a notebook.
+
+    Returns active research tasks with their status, discovered sources, and summaries.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_get_research_status({"notebook_id": notebook_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def import_research_sources(
+    notebook_id: str,
+    task_id: str,
+    sources: list[dict],
+) -> str:
+    """Import discovered research sources into a notebook.
+
+    Args:
+        notebook_id: Library notebook ID.
+        task_id: Task ID returned by start_research.
+        sources: List of {"url": "...", "title": "..."} dicts from get_research_status.
+
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_import_research_sources(
+        {"notebook_id": notebook_id, "task_id": task_id, "sources": sources}
+    )
+    return json.dumps(result, indent=2)
+
+
+def main() -> None:
+    """Run the MCP server (stdio by default, streamable-http when MCP_TRANSPORT=http)."""
+    import os
+    log.info("Starting NotebookLM MCP Server (FastMCP)...")
+    log.info(f"  Config Dir: {CONFIG.configDir}")
+    log.info(f"  Data Dir: {CONFIG.dataDir}")
+    log.info(f"  Headless: {CONFIG.headless}")
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "http":
+        port = int(os.getenv("PORT", "8000"))
+        log.info(f"  Transport: streamable-http on port {port}")
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    else:
+        log.info("  Transport: stdio")
+        mcp.run()
 
 
 def main_sync() -> None:
-    asyncio.run(main())
+    args = sys.argv[1:]
+    if args and args[0] == "config":
+        cli = CliHandler()
+        cli.handle_command(args)
+        return
+    if args and args[0].startswith("--"):
+        from src.mcp_server.cli import main as cli_main
+        cli_main(args)
+        return
+    main()
 
 
 if __name__ == "__main__":

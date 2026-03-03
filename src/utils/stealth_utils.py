@@ -1,7 +1,6 @@
 import asyncio
 import math
 import random
-from typing import Optional
 
 from playwright.async_api import Page
 
@@ -25,7 +24,7 @@ def _random_char() -> str:
     return random.choice(chars)
 
 
-async def random_delay(min_ms: Optional[float] = None, max_ms: Optional[float] = None) -> None:
+async def random_delay(min_ms: float | None = None, max_ms: float | None = None) -> None:
     min_ms = min_ms if min_ms is not None else CONFIG.minDelayMs
     max_ms = max_ms if max_ms is not None else CONFIG.maxDelayMs
 
@@ -46,7 +45,7 @@ async def human_type(
     page: Page,
     selector: str,
     text: str,
-    wpm: Optional[int] = None,
+    wpm: int | None = None,
     with_typos: bool = True,
 ) -> None:
     if not CONFIG.stealthEnabled or not CONFIG.stealthHumanTyping:
@@ -98,9 +97,9 @@ async def human_type(
 
 async def random_mouse_movement(
     page: Page,
-    target_x: Optional[float] = None,
-    target_y: Optional[float] = None,
-    steps: Optional[int] = None,
+    target_x: float | None = None,
+    target_y: float | None = None,
+    steps: int | None = None,
 ) -> None:
     if not CONFIG.stealthEnabled or not CONFIG.stealthMouseMovements:
         return

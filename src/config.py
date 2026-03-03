@@ -1,11 +1,11 @@
 import os
-import re
+
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 from platformdirs import user_data_dir
+
 
 load_dotenv()
 
@@ -60,7 +60,7 @@ class Config:
     instanceProfileTtlHours: int = 72
     instanceProfileMaxCount: int = 20
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.dataDir:
             self.dataDir = _DATA_DIR
         if not self.configDir:
@@ -73,13 +73,13 @@ class Config:
             self.chromeInstancesDir = str(Path(self.dataDir) / "chrome_profile_instances")
 
 
-def _parse_bool(value: Optional[str], default: bool) -> bool:
+def _parse_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.lower() in ("true", "1")
 
 
-def _parse_int(value: Optional[str], default: int) -> int:
+def _parse_int(value: str | None, default: int) -> int:
     if value is None:
         return default
     try:
@@ -88,7 +88,7 @@ def _parse_int(value: Optional[str], default: int) -> int:
         return default
 
 
-def _parse_list(value: Optional[str], default: list) -> list:
+def _parse_list(value: str | None, default: list) -> list:
     if not value:
         return default
     return [s.strip() for s in value.split(",") if s.strip()]
@@ -133,7 +133,7 @@ def ensure_directories(cfg: "Config") -> None:
         Path(d).mkdir(parents=True, exist_ok=True)
 
 
-def apply_browser_options(cfg: "Config", options: Optional[dict] = None, show_browser: Optional[bool] = None) -> "Config":
+def apply_browser_options(cfg: "Config", options: dict | None = None, show_browser: bool | None = None) -> "Config":
     import copy
     c = copy.copy(cfg)
     c.viewport = copy.copy(cfg.viewport)
@@ -179,3 +179,45 @@ def apply_browser_options(cfg: "Config", options: Optional[dict] = None, show_br
 
 CONFIG = build_config()
 ensure_directories(CONFIG)
+
+
+@dataclass
+class ServerConfig:
+    baseDataDir: str = ""
+    host: str = "0.0.0.0"
+    port: int = 8000
+    multiTenant: bool = False
+    maxTenantsInMemory: int = 100
+    tenantIdleTimeoutSeconds: int = 3600
+
+    def __post_init__(self) -> None:
+        if not self.baseDataDir:
+            self.baseDataDir = _DATA_DIR
+
+
+def build_server_config() -> "ServerConfig":
+    cfg = ServerConfig()
+    base = os.environ.get("BASE_DATA_DIR", "")
+    if base:
+        cfg.baseDataDir = base
+    cfg.host = os.environ.get("SERVER_HOST", cfg.host)
+    cfg.port = _parse_int(os.environ.get("SERVER_PORT"), cfg.port)
+    cfg.multiTenant = _parse_bool(os.environ.get("MULTI_TENANT"), cfg.multiTenant)
+    cfg.maxTenantsInMemory = _parse_int(os.environ.get("MAX_TENANTS_IN_MEMORY"), cfg.maxTenantsInMemory)
+    cfg.tenantIdleTimeoutSeconds = _parse_int(os.environ.get("TENANT_IDLE_TIMEOUT_SECONDS"), cfg.tenantIdleTimeoutSeconds)
+    return cfg
+
+
+def build_tenant_config(server_config: "ServerConfig", user_id: str) -> "Config":
+    """Derive a per-user Config with isolated paths under {baseDataDir}/users/{user_id}/."""
+    cfg = build_config()
+    user_dir = Path(server_config.baseDataDir) / "users" / user_id
+    cfg.dataDir = str(user_dir)
+    cfg.configDir = str(user_dir)
+    cfg.browserStateDir = str(user_dir / "browser_state")
+    cfg.chromeProfileDir = str(user_dir / "chrome_profile")
+    cfg.chromeInstancesDir = str(user_dir / "chrome_profile_instances")
+    return cfg
+
+
+SERVER_CONFIG = build_server_config()

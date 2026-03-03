@@ -1,0 +1,211 @@
+include:
+  - project: 'accreteai-main/devops/templates/base-gitlabci'
+    file: 'kaniko-build.yaml'
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+default:
+  tags:
+    - private
+
+stages:
+  - test
+  - secret-detection
+  - build
+  - deploy-dev
+  - deploy-staging
+  - deploy-prod
+
+variables:
+  COMPONENT: "$CI_PROJECT_NAME"
+  IMAGE_NAME: notebooklm-mcp
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
+
+# =============================================================================
+# Test Stage
+# =============================================================================
+
+ruff-lint:
+  stage: test
+  image: python:3.12
+  before_script:
+    - pip install uv
+    - uv venv -p 3.12
+    - source .venv/bin/activate
+    - uv sync --dev --prerelease=allow
+  script:
+    - ruff check src/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+pyright-typecheck:
+  stage: test
+  image: python:3.12
+  before_script:
+    - pip install uv
+    - uv venv -p 3.12
+    - source .venv/bin/activate
+    - uv sync --dev --prerelease=allow
+  script:
+    - pyright src/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+pytest-coverage:
+  stage: test
+  image: python:3.12
+  before_script:
+    - pip install uv
+    - uv venv -p 3.12
+    - source .venv/bin/activate
+    - uv sync --dev --prerelease=allow
+    - uv run playwright install chromium --with-deps
+  script:
+    - pytest --cov=src --cov-report=term --cov-report=xml --cov-fail-under=20
+  coverage: '/(?i)total.*? (100(?:\\.0+)?\\%|[1-9]?\\d(?:\\.\\d+)?\\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =============================================================================
+# Secret Detection Stage
+# =============================================================================
+
+secret_detection:
+  stage: secret-detection
+
+# =============================================================================
+# Build Stage — Kaniko
+# =============================================================================
+
+build-image:
+  stage: build
+  extends: .kaniko-build
+  variables:
+    IMAGE_NAME: "notebooklm-mcp"
+    DOCKERFILE: "Dockerfile"
+    KANIKO_ARGS: >
+      --compressed-caching=false
+      --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
+      --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:cache
+  before_script:
+    - |
+      BRANCH_NAME=$(echo "${CI_COMMIT_BRANCH}" | \
+        sed -E 's/[^a-zA-Z0-9_-]+/_/g; s/^[-_]+|[-_]+$//g')
+      if [ -z "$BRANCH_NAME" ]; then
+        BRANCH_NAME="development"
+      fi
+      echo "Using branch name: $BRANCH_NAME"
+    - export VERSION="${BRANCH_NAME}-$(date +%Y%m%d.%H%M%S)-$CI_COMMIT_SHORT_SHA"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# =============================================================================
+# Deploy to Dev - Manual, adds development-TIMESTAMP-SHA tag for Flux to pick up
+# =============================================================================
+
+deploy-dev:
+  stage: deploy-dev
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - until docker info; do sleep 1; done
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Deploying to dev environment"
+    - DEPLOY_TIMESTAMP=$(date +%Y%m%d.%H%M%S)
+    - DEPLOY_TAG="development-${DEPLOY_TIMESTAMP}-${CI_COMMIT_SHA}"
+    - echo "Adding tag ${DEPLOY_TAG} to image ${DOCKER_IMAGE}"
+    - docker pull $DOCKER_IMAGE
+    - docker tag $DOCKER_IMAGE $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - docker push $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - echo "Pushed $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG - Flux will pick this up"
+  environment:
+    name: dev
+  needs: [build-image]
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+      when: manual
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+
+# =============================================================================
+# Deploy to Staging - Manual, adds staging-TIMESTAMP-SHA tag for Flux to pick up
+# =============================================================================
+
+deploy-staging:
+  stage: deploy-staging
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - until docker info; do sleep 1; done
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Deploying to staging environment"
+    - DEPLOY_TIMESTAMP=$(date +%Y%m%d.%H%M%S)
+    - DEPLOY_TAG="staging-${DEPLOY_TIMESTAMP}-${CI_COMMIT_SHA}"
+    - echo "Adding tag ${DEPLOY_TAG} to image ${DOCKER_IMAGE}"
+    - docker pull $DOCKER_IMAGE
+    - docker tag $DOCKER_IMAGE $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - docker push $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - echo "Pushed $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG - Flux will pick this up"
+  environment:
+    name: staging
+  needs: [build-image]
+  allow_failure: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+
+# =============================================================================
+# Deploy to Prod - Manual, adds main-TIMESTAMP-SHA tag for Flux to pick up
+# Blocked until deploy-staging succeeds
+# =============================================================================
+
+deploy-prod:
+  stage: deploy-prod
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - until docker info; do sleep 1; done
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Deploying to prod environment"
+    - DEPLOY_TIMESTAMP=$(date +%Y%m%d.%H%M%S)
+    - DEPLOY_TAG="main-${DEPLOY_TIMESTAMP}-${CI_COMMIT_SHA}"
+    - echo "Adding tag ${DEPLOY_TAG} to image ${DOCKER_IMAGE}"
+    - docker pull $DOCKER_IMAGE
+    - docker tag $DOCKER_IMAGE $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - docker push $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG
+    - echo "Pushed $CI_REGISTRY_IMAGE/$IMAGE_NAME:$DEPLOY_TAG - Flux will pick this up"
+  environment:
+    name: prod
+  needs: [deploy-staging]
+  allow_failure: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual

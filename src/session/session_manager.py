@@ -1,9 +1,8 @@
 import asyncio
 import secrets
-from typing import Optional
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG
+from ..config import CONFIG, Config
 from ..types import SessionInfo
 from ..utils.logger import log
 from .browser_session import BrowserSession
@@ -11,13 +10,14 @@ from .shared_context_manager import SharedContextManager
 
 
 class SessionManager:
-    def __init__(self, auth_manager: AuthManager) -> None:
+    def __init__(self, auth_manager: AuthManager, config: Config | None = None) -> None:
+        self._config = config or CONFIG
         self._auth = auth_manager
-        self._shared_ctx = SharedContextManager(auth_manager)
+        self._shared_ctx = SharedContextManager(auth_manager, self._config)
         self._sessions: dict[str, BrowserSession] = {}
-        self._max_sessions = CONFIG.maxSessions
-        self._session_timeout = CONFIG.sessionTimeout
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._max_sessions = self._config.maxSessions
+        self._session_timeout = self._config.sessionTimeout
+        self._cleanup_task: asyncio.Task | None = None
 
         log.info("SessionManager initialized")
         log.info(f"  Max sessions: {self._max_sessions}")
@@ -28,7 +28,7 @@ class SessionManager:
         self._start_cleanup_loop()
 
     def _start_cleanup_loop(self) -> None:
-        async def loop():
+        async def loop() -> None:
             while True:
                 await asyncio.sleep(self._cleanup_interval)
                 try:
@@ -48,11 +48,11 @@ class SessionManager:
 
     async def get_or_create_session(
         self,
-        session_id: Optional[str] = None,
-        notebook_url: Optional[str] = None,
-        override_headless: Optional[bool] = None,
+        session_id: str | None = None,
+        notebook_url: str | None = None,
+        override_headless: bool | None = None,
     ) -> BrowserSession:
-        target_url = (notebook_url or CONFIG.notebookUrl or "").strip()
+        target_url = (notebook_url or self._config.notebookUrl or "").strip()
         if not target_url:
             raise ValueError("Notebook URL is required to create a session")
         if not target_url.startswith("http"):
@@ -85,7 +85,7 @@ class SessionManager:
         log.info(f"Creating new session {session_id}...")
         try:
             await self._shared_ctx.get_or_create_context(override_headless)
-            session = BrowserSession(session_id, self._shared_ctx, self._auth, target_url)
+            session = BrowserSession(session_id, self._shared_ctx, self._auth, target_url, self._config)
             await session.init()
             self._sessions[session_id] = session
             log.success(f"Session {session_id} created ({len(self._sessions)}/{self._max_sessions} active)")
@@ -94,7 +94,7 @@ class SessionManager:
             log.error(f"Failed to create session: {e}")
             raise
 
-    def get_session(self, session_id: str) -> Optional[BrowserSession]:
+    def get_session(self, session_id: str) -> BrowserSession | None:
         return self._sessions.get(session_id)
 
     async def close_session(self, session_id: str) -> bool:

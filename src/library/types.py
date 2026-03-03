@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class NotebookEntry(TypedDict):
@@ -17,15 +17,15 @@ class NotebookEntry(TypedDict):
 
 class Library(TypedDict):
     notebooks: list
-    active_notebook_id: Optional[str]
+    active_notebook_id: str | None
     last_modified: str
     version: str
 
 
 class LibraryStats(TypedDict):
     total_notebooks: int
-    active_notebook: Optional[str]
-    most_used_notebook: Optional[str]
+    active_notebook: str | None
+    most_used_notebook: str | None
     total_queries: int
     last_modified: str
 

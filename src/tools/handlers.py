@@ -1,14 +1,18 @@
 import time
-from typing import Any, Optional
+
+from pathlib import Path
+from typing import Any
 
 from ..auth.auth_manager import AuthManager
-from ..config import CONFIG, apply_browser_options
+from ..config import CONFIG, Config, apply_browser_options
 from ..errors import RateLimitError
+from ..http_client import NotebookLMAPIClient
 from ..library.notebook_library import NotebookLibrary
 from ..session.session_manager import SessionManager
+from ..types import ProgressCallback
 from ..utils.cleanup_manager import CleanupManager
 from ..utils.logger import log
-from ..types import ProgressCallback
+
 
 FOLLOW_UP_REMINDER = (
     "\n\nEXTREMELY IMPORTANT: Is that ALL you need to know? You can always ask another question "
@@ -24,22 +28,27 @@ class ToolHandlers:
         session_manager: SessionManager,
         auth_manager: AuthManager,
         library: NotebookLibrary,
+        config: Config | None = None,
     ) -> None:
         self._sessions = session_manager
         self._auth = auth_manager
         self._library = library
+        self._config = config or CONFIG
+        self._api_client = NotebookLMAPIClient(
+            Path(self._config.browserStateDir) / "state.json"
+        )
 
     async def handle_ask_question(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
         question: str = args["question"]
-        session_id: Optional[str] = args.get("session_id")
-        notebook_id: Optional[str] = args.get("notebook_id")
-        notebook_url: Optional[str] = args.get("notebook_url")
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        session_id: str | None = args.get("session_id")
+        notebook_id: str | None = args.get("notebook_id")
+        notebook_url: str | None = args.get("notebook_url")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         log.info("[TOOL] ask_question called")
         log.info(f'  Question: "{question[:100]}"...')
@@ -70,13 +79,9 @@ class ToolHandlers:
             if send_progress:
                 await send_progress("Getting or creating browser session...", 1, 5)
 
-            original_headless = CONFIG.headless
-            original_timeout = CONFIG.browserTimeout
-            _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-            CONFIG.headless = _cfg.headless
-            CONFIG.browserTimeout = _cfg.browserTimeout
+            apply_browser_options(self._config, browser_options, show_browser)
 
-            override_headless: Optional[bool] = None
+            override_headless: bool | None = None
             if show_browser is not None:
                 override_headless = show_browser
             elif browser_options and browser_options.get("show") is not None:
@@ -84,39 +89,35 @@ class ToolHandlers:
             elif browser_options and browser_options.get("headless") is not None:
                 override_headless = not browser_options["headless"]
 
-            try:
-                session = await self._sessions.get_or_create_session(
-                    session_id, resolved_url, override_headless
-                )
+            session = await self._sessions.get_or_create_session(
+                session_id, resolved_url, override_headless
+            )
 
-                if send_progress:
-                    await send_progress("Asking question to NotebookLM...", 2, 5)
+            if send_progress:
+                await send_progress("Asking question to NotebookLM...", 2, 5)
 
-                raw_answer = await session.ask(question, send_progress)
-                answer = raw_answer.rstrip() + FOLLOW_UP_REMINDER
+            raw_answer = await session.ask(question, send_progress)
+            answer = raw_answer.rstrip() + FOLLOW_UP_REMINDER
 
-                info = session.get_info()
-                result = {
-                    "status": "success",
-                    "question": question,
-                    "answer": answer,
-                    "session_id": session.session_id,
-                    "notebook_url": session.notebook_url,
-                    "session_info": {
-                        "age_seconds": info["age_seconds"],
-                        "message_count": info["message_count"],
-                        "last_activity": info["last_activity"],
-                    },
-                }
+            info = session.get_info()
+            result = {
+                "status": "success",
+                "question": question,
+                "answer": answer,
+                "session_id": session.session_id,
+                "notebook_url": session.notebook_url,
+                "session_info": {
+                    "age_seconds": info["age_seconds"],
+                    "message_count": info["message_count"],
+                    "last_activity": info["last_activity"],
+                },
+            }
 
-                if send_progress:
-                    await send_progress("Question answered successfully!", 5, 5)
+            if send_progress:
+                await send_progress("Question answered successfully!", 5, 5)
 
-                log.success("[TOOL] ask_question completed successfully")
-                return {"success": True, "data": result}
-            finally:
-                CONFIG.headless = original_headless
-                CONFIG.browserTimeout = original_timeout
+            log.success("[TOOL] ask_question completed successfully")
+            return {"success": True, "data": result}
 
         except Exception as e:
             msg = str(e)
@@ -205,14 +206,14 @@ class ToolHandlers:
             result: dict[str, Any] = {
                 "status": "ok",
                 "authenticated": authenticated,
-                "notebook_url": CONFIG.notebookUrl or "not configured",
+                "notebook_url": self._config.notebookUrl or "not configured",
                 "active_sessions": stats["active_sessions"],
                 "max_sessions": stats["max_sessions"],
                 "session_timeout": stats["session_timeout"],
                 "total_messages": stats["total_messages"],
-                "headless": CONFIG.headless,
-                "auto_login_enabled": CONFIG.autoLoginEnabled,
-                "stealth_enabled": CONFIG.stealthEnabled,
+                "headless": self._config.headless,
+                "auto_login_enabled": self._config.autoLoginEnabled,
+                "stealth_enabled": self._config.stealthEnabled,
             }
             if not authenticated:
                 result["troubleshooting_tip"] = (
@@ -228,10 +229,10 @@ class ToolHandlers:
     async def handle_setup_auth(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         if send_progress:
             await send_progress("Initializing authentication setup...", 0, 10)
@@ -239,11 +240,7 @@ class ToolHandlers:
         log.info("[TOOL] setup_auth called")
         start = time.time()
 
-        original_headless = CONFIG.headless
-        original_timeout = CONFIG.browserTimeout
-        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-        CONFIG.headless = _cfg.headless
-        CONFIG.browserTimeout = _cfg.browserTimeout
+        apply_browser_options(self._config, browser_options, show_browser)
 
         try:
             if send_progress:
@@ -274,17 +271,14 @@ class ToolHandlers:
             duration = time.time() - start
             log.error(f"[TOOL] setup_auth failed: {e} ({duration:.1f}s)")
             return {"success": False, "error": str(e)}
-        finally:
-            CONFIG.headless = original_headless
-            CONFIG.browserTimeout = original_timeout
 
     async def handle_re_auth(
         self,
         args: dict,
-        send_progress: Optional[ProgressCallback] = None,
+        send_progress: ProgressCallback | None = None,
     ) -> dict:
-        show_browser: Optional[bool] = args.get("show_browser")
-        browser_options: Optional[dict] = args.get("browser_options")
+        show_browser: bool | None = args.get("show_browser")
+        browser_options: dict | None = args.get("browser_options")
 
         if send_progress:
             await send_progress("Preparing re-authentication...", 0, 12)
@@ -292,11 +286,7 @@ class ToolHandlers:
         log.info("[TOOL] re_auth called")
         start = time.time()
 
-        original_headless = CONFIG.headless
-        original_timeout = CONFIG.browserTimeout
-        _cfg = apply_browser_options(CONFIG, browser_options, show_browser)
-        CONFIG.headless = _cfg.headless
-        CONFIG.browserTimeout = _cfg.browserTimeout
+        apply_browser_options(self._config, browser_options, show_browser)
 
         try:
             if send_progress:
@@ -332,9 +322,6 @@ class ToolHandlers:
             duration = time.time() - start
             log.error(f"[TOOL] re_auth failed: {e} ({duration:.1f}s)")
             return {"success": False, "error": str(e)}
-        finally:
-            CONFIG.headless = original_headless
-            CONFIG.browserTimeout = original_timeout
 
     async def handle_add_notebook(self, args: dict) -> dict:
         log.info(f"[TOOL] add_notebook called: {args.get('name')}")
@@ -435,11 +422,11 @@ class ToolHandlers:
         preserve_library: bool = args.get("preserve_library", False)
         log.info(f"[TOOL] cleanup_data called (confirm={confirm}, preserve_library={preserve_library})")
 
-        manager = CleanupManager()
+        manager = CleanupManager(self._config.dataDir)
         try:
             mode = "deep"
             if not confirm:
-                preview = await manager.get_cleanup_paths(mode, preserve_library)
+                preview = manager.get_cleanup_paths(mode, preserve_library)
                 log.info(f"  Found {len(preview['total_paths'])} items ({manager.format_bytes(preview['total_size_bytes'])})")
                 return {
                     "success": True,
@@ -454,7 +441,7 @@ class ToolHandlers:
                     },
                 }
             else:
-                result = await manager.perform_cleanup(mode, preserve_library)
+                result = manager.perform_cleanup(mode, preserve_library)
                 if result["success"]:
                     log.success(f"[TOOL] cleanup_data completed - deleted {len(result['deleted_paths'])} items")
                 else:
@@ -474,6 +461,122 @@ class ToolHandlers:
                 }
         except Exception as e:
             log.error(f"[TOOL] cleanup_data failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _resolve_notebook_url(self, notebook_id: str) -> str:
+        """Look up a notebook by library ID and return its URL."""
+        notebook = self._library.get_notebook(notebook_id)
+        if not notebook:
+            raise ValueError(f"Notebook not found in library: {notebook_id}")
+        return notebook["url"]
+
+    async def handle_list_sources(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        log.info(f"[TOOL] list_sources called: {notebook_id}")
+        try:
+            url = self._resolve_notebook_url(notebook_id)
+            sources = await self._api_client.list_sources(url)
+            log.success(f"[TOOL] list_sources completed ({len(sources)} sources)")
+            return {"success": True, "data": {"sources": sources}}
+        except Exception as e:
+            log.error(f"[TOOL] list_sources failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_url(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        url: str = args["url"]
+        log.info(f"[TOOL] add_source_url called: {notebook_id} <- {url}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            source = await self._api_client.add_source_url(nb_url, url)
+            log.success(f"[TOOL] add_source_url completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_url failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_text(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        title: str = args["title"]
+        content: str = args["content"]
+        log.info(f"[TOOL] add_source_text called: {notebook_id} <- {title!r}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            source = await self._api_client.add_source_text(nb_url, title, content)
+            log.success(f"[TOOL] add_source_text completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_text failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_file(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        file_path_str: str = args["file_path"]
+        log.info(f"[TOOL] add_source_file called: {notebook_id} <- {file_path_str}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            file_path = Path(file_path_str)
+            if not file_path.exists():
+                return {"success": False, "error": f"File not found: {file_path_str}"}
+            source = await self._api_client.add_source_file(nb_url, file_path)
+            log.success(f"[TOOL] add_source_file completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_file failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_delete_source(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        source_id: str = args["source_id"]
+        log.info(f"[TOOL] delete_source called: {notebook_id} / {source_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            await self._api_client.delete_source(nb_url, source_id)
+            log.success("[TOOL] delete_source completed")
+            return {"success": True, "data": {"deleted": True, "source_id": source_id}}
+        except Exception as e:
+            log.error(f"[TOOL] delete_source failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_start_research(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        query: str = args["query"]
+        source: str = args.get("source", "web")
+        mode: str = args.get("mode", "fast")
+        log.info(f"[TOOL] start_research called: {notebook_id} / {query!r}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            result = await self._api_client.start_research(nb_url, query, source, mode)
+            log.success(f"[TOOL] start_research completed: task_id={result.get('task_id')}")
+            return {"success": True, "data": result}
+        except Exception as e:
+            log.error(f"[TOOL] start_research failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_get_research_status(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        log.info(f"[TOOL] get_research_status called: {notebook_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            result = await self._api_client.get_research_status(nb_url)
+            log.success(f"[TOOL] get_research_status completed: {len(result.get('tasks', []))} tasks")
+            return {"success": True, "data": result}
+        except Exception as e:
+            log.error(f"[TOOL] get_research_status failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_import_research_sources(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        task_id: str = args["task_id"]
+        sources: list[dict[str, str]] = args.get("sources", [])
+        log.info(f"[TOOL] import_research_sources called: {notebook_id} / task={task_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            imported = await self._api_client.import_research_sources(nb_url, task_id, sources)
+            log.success(f"[TOOL] import_research_sources completed: {len(imported)} imported")
+            return {"success": True, "data": {"imported": imported}}
+        except Exception as e:
+            log.error(f"[TOOL] import_research_sources failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def cleanup(self) -> None:

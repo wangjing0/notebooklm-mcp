@@ -1,4 +1,5 @@
-from typing import Any, Awaitable, Callable, Optional, TypedDict
+from collections.abc import Awaitable, Callable
+from typing import Any, TypedDict
 
 
 class SessionInfo(TypedDict):
@@ -26,4 +27,4 @@ class ToolResult(TypedDict, total=False):
     error: str
 
 
-ProgressCallback = Callable[[str, Optional[int], Optional[int]], Awaitable[None]]
+ProgressCallback = Callable[[str, int | None, int | None], Awaitable[None]]
