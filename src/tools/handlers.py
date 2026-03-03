@@ -1,10 +1,12 @@
 import time
 
+from pathlib import Path
 from typing import Any
 
 from ..auth.auth_manager import AuthManager
 from ..config import CONFIG, Config, apply_browser_options
 from ..errors import RateLimitError
+from ..http_client import NotebookLMAPIClient
 from ..library.notebook_library import NotebookLibrary
 from ..session.session_manager import SessionManager
 from ..types import ProgressCallback
@@ -32,6 +34,9 @@ class ToolHandlers:
         self._auth = auth_manager
         self._library = library
         self._config = config or CONFIG
+        self._api_client = NotebookLMAPIClient(
+            Path(self._config.browserStateDir) / "state.json"
+        )
 
     async def handle_ask_question(
         self,
@@ -456,6 +461,122 @@ class ToolHandlers:
                 }
         except Exception as e:
             log.error(f"[TOOL] cleanup_data failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _resolve_notebook_url(self, notebook_id: str) -> str:
+        """Look up a notebook by library ID and return its URL."""
+        notebook = self._library.get_notebook(notebook_id)
+        if not notebook:
+            raise ValueError(f"Notebook not found in library: {notebook_id}")
+        return notebook["url"]
+
+    async def handle_list_sources(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        log.info(f"[TOOL] list_sources called: {notebook_id}")
+        try:
+            url = self._resolve_notebook_url(notebook_id)
+            sources = await self._api_client.list_sources(url)
+            log.success(f"[TOOL] list_sources completed ({len(sources)} sources)")
+            return {"success": True, "data": {"sources": sources}}
+        except Exception as e:
+            log.error(f"[TOOL] list_sources failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_url(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        url: str = args["url"]
+        log.info(f"[TOOL] add_source_url called: {notebook_id} <- {url}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            source = await self._api_client.add_source_url(nb_url, url)
+            log.success(f"[TOOL] add_source_url completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_url failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_text(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        title: str = args["title"]
+        content: str = args["content"]
+        log.info(f"[TOOL] add_source_text called: {notebook_id} <- {title!r}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            source = await self._api_client.add_source_text(nb_url, title, content)
+            log.success(f"[TOOL] add_source_text completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_text failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_add_source_file(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        file_path_str: str = args["file_path"]
+        log.info(f"[TOOL] add_source_file called: {notebook_id} <- {file_path_str}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            file_path = Path(file_path_str)
+            if not file_path.exists():
+                return {"success": False, "error": f"File not found: {file_path_str}"}
+            source = await self._api_client.add_source_file(nb_url, file_path)
+            log.success(f"[TOOL] add_source_file completed: {source.get('id')}")
+            return {"success": True, "data": {"source": source}}
+        except Exception as e:
+            log.error(f"[TOOL] add_source_file failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_delete_source(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        source_id: str = args["source_id"]
+        log.info(f"[TOOL] delete_source called: {notebook_id} / {source_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            await self._api_client.delete_source(nb_url, source_id)
+            log.success("[TOOL] delete_source completed")
+            return {"success": True, "data": {"deleted": True, "source_id": source_id}}
+        except Exception as e:
+            log.error(f"[TOOL] delete_source failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_start_research(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        query: str = args["query"]
+        source: str = args.get("source", "web")
+        mode: str = args.get("mode", "fast")
+        log.info(f"[TOOL] start_research called: {notebook_id} / {query!r}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            result = await self._api_client.start_research(nb_url, query, source, mode)
+            log.success(f"[TOOL] start_research completed: task_id={result.get('task_id')}")
+            return {"success": True, "data": result}
+        except Exception as e:
+            log.error(f"[TOOL] start_research failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_get_research_status(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        log.info(f"[TOOL] get_research_status called: {notebook_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            result = await self._api_client.get_research_status(nb_url)
+            log.success(f"[TOOL] get_research_status completed: {len(result.get('tasks', []))} tasks")
+            return {"success": True, "data": result}
+        except Exception as e:
+            log.error(f"[TOOL] get_research_status failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_import_research_sources(self, args: dict) -> dict:
+        notebook_id: str = args["notebook_id"]
+        task_id: str = args["task_id"]
+        sources: list[dict[str, str]] = args.get("sources", [])
+        log.info(f"[TOOL] import_research_sources called: {notebook_id} / task={task_id}")
+        try:
+            nb_url = self._resolve_notebook_url(notebook_id)
+            imported = await self._api_client.import_research_sources(nb_url, task_id, sources)
+            log.success(f"[TOOL] import_research_sources completed: {len(imported)} imported")
+            return {"success": True, "data": {"imported": imported}}
+        except Exception as e:
+            log.error(f"[TOOL] import_research_sources failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def cleanup(self) -> None:

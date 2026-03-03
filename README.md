@@ -4,7 +4,7 @@
 
 **Let agent harness (Claude, Cursor, Codex...) chats directly with your NotebookLM project**
 
-Credits to the original [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) (TypeScript). This is a Python port.
+Credits to the original [NotebookLM MCP](https://github.com/PleasePrompto/notebooklm-mcp) (TypeScript). This is a Python implementation.
 
 [Installation](#installation) · [Quick Start](#quick-start-in-claude-code) · [Configuration](#configuration) · [Architecture](#architecture) · [Examples](#examples) · [FAQ](#faq) · [Disclaimer](#disclaimer) · [Roadmap](#roadmap)
 
@@ -126,17 +126,24 @@ NOTEBOOKLM_PROFILE=full
 
 ## Architecture
 
+The server exposes two transport paths depending on the tool:
+
 ```
 Your request  →  Claude / Cursor / Codex
                         ↕
                  notebooklm-mcp
-                        ↕
-            Playwright + humanized Chrome
-                        ↕
-                   NotebookLM UI
-                        ↕
-         Your docs, sites, repos, videos, etc.
+               ┌────────┴────────┐
+  ask_question │                 │ list/add/delete sources
+  (browser)    │                 │ start/poll/import research
+               ↓                 ↓
+  Playwright + Chrome     Direct HTTP RPC
+               ↕          (NotebookLM batchexecute API)
+         NotebookLM UI
+               ↕
+    Your docs, sites, repos, videos, etc.
 ```
+
+Conversational queries (`ask_question`) use Playwright-driven browser automation because the chat interface has no public API. Source management and research tools bypass the browser entirely and call the NotebookLM internal RPC endpoint directly over HTTP, using the same auth credentials saved by `setup_auth`.
 
 Browser state and Chrome profiles are stored in `~/Library/Application Support/notebooklm-mcp/` (macOS) or the platform equivalent via `platformdirs`.
 
@@ -190,6 +197,12 @@ See [`multi-tenant_tutorial.md`](multi-tenant_tutorial.md) for a complete end-to
 | Fix auth        | *"Repair NotebookLM authentication"* | Clears and re-authenticates |
 | Switch account  | *"Re-authenticate with different Google account"* | Changes Google account |
 | Clean restart   | *"Run NotebookLM cleanup"* | Removes all data for fresh start |
+| List sources    | *"What sources are in my notebook?"* | Lists sources with status |
+| Add URL         | *"Add this URL to my notebook"* | Adds web page or YouTube video as source |
+| Add text        | *"Add this text as a source"* | Adds pasted text as source |
+| Upload file     | *"Add this PDF to my notebook"* | Uploads local file as source |
+| Remove source   | *"Delete source X from my notebook"* | Removes a source |
+| Web research    | *"Research [topic] and add sources"* | Discovers web sources, imports chosen ones |
 
 ---
 
@@ -205,7 +218,7 @@ Free tier has daily query limits ~50 per Google account.
 Chrome runs locally. Your credentials never leave your machine. Use a dedicated Google account if preferred.
 
 **Can I see what's happening?** \
-Yes — headless mode is enabled by default. however, say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call.
+Yes — headless mode is enabled by default, but you can bring up a visible Chrome window at any time. Say *"Ask NotebookLM '[your question]' and show me the browser"* to pass `show_browser: true` to any tool call. The window is a real Chrome instance: you can click, scroll, type, and interact with NotebookLM manually while the agent is running alongside you.
 
 ![notebooklm-browser](docs/with_browser_on.png)
 
@@ -236,12 +249,13 @@ Browser automation is the pragmatic solution for free-tier access. Multiple inde
 
 ## Roadmap
 
-- **Session persistence and recovery** — in both single-tenant (stdio) and multi-tenant (HTTP) modes, in-memory session state is lost when the process exits or a tenant is evicted. A future improvement would serialize active session metadata to disk (or a lightweight store like SQLite) so that sessions can be restored on reconnect rather than requiring a fresh browser login and notebook selection.
 
-- **Reliability** — the browser automation layer is the most fragile part of the stack. NotebookLM UI changes (selectors, page structure) can silently break queries. A self-healing selector strategy and structured failure detection, combined with retry logic for transient browser and network errors, would make the system significantly more resilient across NotebookLM updates.
+[x] **Source management** — notebooks can be queried but sources cannot be added or removed programmatically. Browser-automating the source upload flow would close the loop, allowing agents to create notebooks, add documents, and query them end-to-end without any manual steps.
 
-- **Intelligent notebook routing** — currently the user must explicitly select or pass a `notebook_id`. An agentic routing layer that matches the query against notebook description would let user simply asks a question and have the right notebook selected automatically.
+[] **Session persistence and recovery** — in both single-tenant (stdio) and multi-tenant (HTTP) modes, in-memory session state is lost when the process exits or a tenant is evicted. A future improvement would serialize active session metadata to disk (or a lightweight store like SQLite) so that sessions can be restored on reconnect rather than requiring a fresh browser login and notebook selection.
 
-- **Horizontal scaling and shared state** — the current design is fundamentally single-process: `TenantManager` lives in memory and Chrome profiles live on local disk, so two replicas would have diverging tenant state. A shared backing store (session metadata, object storage for Chrome profiles) would unlock horizontal state sharing.
+[] **Reliability** — the browser automation layer is the most fragile part of the stack. NotebookLM UI changes (selectors, page structure) can silently break queries. A self-healing selector strategy and structured failure detection, combined with retry logic for transient browser and network errors, would make the system significantly more resilient across NotebookLM updates.
 
-- **Source management** — notebooks can be queried but sources cannot be added or removed programmatically. Browser-automating the source upload flow would close the loop, allowing agents to create notebooks, add documents, and query them end-to-end without any manual steps.
+[] **Intelligent notebook routing** — currently the user must explicitly select or pass a `notebook_id`. An agentic routing layer that matches the query against notebook description would let user simply asks a question and have the right notebook selected automatically.
+
+[] **Horizontal scaling and shared state** — the current design is fundamentally single-process: `TenantManager` lives in memory and Chrome profiles live on local disk, so two replicas would have diverging tenant state. A shared backing store (session metadata, object storage for Chrome profiles) would unlock horizontal state sharing.

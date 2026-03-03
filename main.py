@@ -206,6 +206,123 @@ async def cleanup_data(
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def list_sources(notebook_id: str) -> str:
+    """List all sources in a notebook.
+
+    Returns source IDs, titles, URLs, and processing status.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_list_sources({"notebook_id": notebook_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_url(notebook_id: str, url: str) -> str:
+    """Add a web URL or YouTube video as a source in a notebook.
+
+    Automatically detects YouTube URLs and handles them appropriately.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_url({"notebook_id": notebook_id, "url": url})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_text(notebook_id: str, title: str, content: str) -> str:
+    """Add pasted text as a source in a notebook.
+
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_text(
+        {"notebook_id": notebook_id, "title": title, "content": content}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def add_source_file(notebook_id: str, file_path: str) -> str:
+    """Upload a local file (PDF, DOCX, TXT, MD, etc.) as a source in a notebook.
+
+    The file_path must be an absolute path to an existing local file.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_add_source_file(
+        {"notebook_id": notebook_id, "file_path": file_path}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def delete_source(notebook_id: str, source_id: str) -> str:
+    """Remove a source from a notebook by source ID.
+
+    Use list_sources to get the source ID.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_delete_source(
+        {"notebook_id": notebook_id, "source_id": source_id}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def start_research(
+    notebook_id: str,
+    query: str,
+    source: str = "web",
+    mode: str = "fast",
+) -> str:
+    """Start a research session to discover sources for a query.
+
+    Args:
+        notebook_id: Library notebook ID.
+        query: Research query string.
+        source: "web" for web search or "drive" for Google Drive search.
+        mode: "fast" for quick results or "deep" for thorough analysis.
+
+    Returns the task_id. Use get_research_status to poll for results,
+    then import_research_sources to add discovered sources to the notebook.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_start_research(
+        {"notebook_id": notebook_id, "query": query, "source": source, "mode": mode}
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_research_status(notebook_id: str) -> str:
+    """Poll current research tasks for a notebook.
+
+    Returns active research tasks with their status, discovered sources, and summaries.
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_get_research_status({"notebook_id": notebook_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def import_research_sources(
+    notebook_id: str,
+    task_id: str,
+    sources: list[dict],
+) -> str:
+    """Import discovered research sources into a notebook.
+
+    Args:
+        notebook_id: Library notebook ID.
+        task_id: Task ID returned by start_research.
+        sources: List of {"url": "...", "title": "..."} dicts from get_research_status.
+
+    Requires authentication (run setup_auth first).
+    """
+    result = await _handlers.handle_import_research_sources(
+        {"notebook_id": notebook_id, "task_id": task_id, "sources": sources}
+    )
+    return json.dumps(result, indent=2)
+
+
 def main() -> None:
     """Run the MCP server (stdio by default, streamable-http when MCP_TRANSPORT=http)."""
     import os

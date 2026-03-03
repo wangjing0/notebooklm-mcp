@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.7.1",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]
@@ -88,6 +89,7 @@ unfixable = []
 "src/utils/cli_handler.py" = ["T201"]
 "src/utils/logger.py" = ["T201"]
 "src/mcp_server/multi_tenant_server.py" = ["ANN401"]
+"src/http_client/client.py" = ["ANN401"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
